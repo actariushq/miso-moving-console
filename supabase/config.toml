@@ -1,0 +1,5 @@
+# supabase CLI 연결용 최소 설정 (원격 프로젝트만 사용, 로컬 도커 불필요)
+project_id = "miso-moving-console"
+
+[api]
+schemas = ["public", "graphql_public"]

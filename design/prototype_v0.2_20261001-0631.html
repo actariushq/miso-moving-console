@@ -1,0 +1,971 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>미소 이사 콘솔</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: 좌측 레일(모듈) + 작업 영역(요약 → 큐/보드) + 우측 상세 드로어. 운영 콘솔이라 장식 없이 상태를 형태로 인코딩 */
+:root{
+  --bg:#EEF1F4; --surface:#FFFFFF; --surface-2:#F6F8FA; --ink:#15202B; --muted:#5A6776; --faint:#8994A1;
+  --line:#DCE2E8; --line-strong:#C3CCD5;
+  --accent:#1D56C9; --accent-ink:#FFFFFF; --accent-soft:#E3ECFB;
+  --ok:#1C7F52; --ok-soft:#E1F3EA; --warn:#A8690F; --warn-soft:#FBF0DC; --bad:#BF3328; --bad-soft:#FBE6E3;
+  --rail:#15202B; --rail-ink:#C9D3DD; --rail-active:#FFFFFF;
+  --shadow:0 12px 32px rgba(21,32,43,.16);
+  --f-body:"IBM Plex Sans KR",system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0F151C; --surface:#18212B; --surface-2:#1E2833; --ink:#E6ECF2; --muted:#9AA7B5; --faint:#6D7A88;
+  --line:#28333F; --line-strong:#3A4755;
+  --accent:#6E9CF5; --accent-ink:#0C1624; --accent-soft:#1C2C48;
+  --ok:#4DC08A; --ok-soft:#15352A; --warn:#E3A847; --warn-soft:#3A2D14; --bad:#F07A6E; --bad-soft:#40201D;
+  --rail:#0A0F14; --rail-ink:#9AA7B5; --rail-active:#FFFFFF; --shadow:0 12px 32px rgba(0,0,0,.5); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0F151C; --surface:#18212B; --surface-2:#1E2833; --ink:#E6ECF2; --muted:#9AA7B5; --faint:#6D7A88;
+  --line:#28333F; --line-strong:#3A4755;
+  --accent:#6E9CF5; --accent-ink:#0C1624; --accent-soft:#1C2C48;
+  --ok:#4DC08A; --ok-soft:#15352A; --warn:#E3A847; --warn-soft:#3A2D14; --bad:#F07A6E; --bad-soft:#40201D;
+  --rail:#0A0F14; --rail-ink:#9AA7B5; --rail-active:#FFFFFF; --shadow:0 12px 32px rgba(0,0,0,.5); color-scheme:dark}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.5}
+button,input,select,textarea{font:inherit;color:inherit}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.app{display:grid;grid-template-columns:216px minmax(0,1fr);min-height:100%}
+/* rail */
+.rail{background:var(--rail);color:var(--rail-ink);padding:20px 14px;display:flex;flex-direction:column;gap:22px;position:sticky;top:0;height:100vh}
+.brand{display:flex;flex-direction:column;gap:2px;padding:0 8px}
+.brand b{color:var(--rail-active);font-size:16px;letter-spacing:-.01em}
+.brand span{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--rail-ink)}
+.navgroup{display:flex;flex-direction:column;gap:2px}
+.navgroup h6{margin:0 0 4px;padding:0 8px;font-size:11px;font-weight:500;letter-spacing:.08em;color:#7D8A98}
+.nav{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border-radius:6px;color:var(--rail-ink);text-decoration:none;font-size:14px}
+.nav:hover{background:rgba(255,255,255,.06)}
+.nav[aria-current="page"]{background:rgba(255,255,255,.1);color:var(--rail-active);font-weight:600}
+.nav .cnt{font-family:var(--f-mono);font-size:12px;opacity:.8}
+.nav .cnt.hot{color:#FF9A8F;opacity:1}
+.rail-foot{margin-top:auto;display:flex;flex-direction:column;gap:6px;padding:0 8px;font-size:12px}
+.rail-foot label{color:#7D8A98}
+.rail-foot select{background:#223040;border:1px solid #34445A;border-radius:6px;padding:6px 8px;color:#E6ECF2}
+.sample{display:inline-block;font-size:11px;color:#F2C46B;border:1px solid #6B5629;border-radius:4px;padding:1px 6px;margin-top:6px}
+/* main */
+.main{padding-block:22px 40px;padding-inline:28px;min-width:0;display:flex;flex-direction:column;gap:18px}
+.head{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px}
+.head h1{margin:0;font-size:22px;letter-spacing:-.02em;text-wrap:balance}
+.head p{margin:2px 0 0;color:var(--muted);font-size:13px;max-width:70ch}
+.today{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.kpi{background:var(--surface);padding:12px 16px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.kpi .l{font-size:12px;color:var(--muted)}
+.kpi .v{font-family:var(--f-mono);font-size:22px;font-weight:600;letter-spacing:-.02em}
+.kpi .s{font-size:12px;color:var(--faint)}
+.kpi .v.bad{color:var(--bad)} .kpi .v.ok{color:var(--ok)}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.seg{display:inline-flex;border:1px solid var(--line-strong);border-radius:6px;overflow:hidden;background:var(--surface)}
+.seg button{border:0;background:none;padding:5px 12px;font-size:13px;cursor:pointer;color:var(--muted)}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent);font-weight:600}
+input.search{border:1px solid var(--line-strong);border-radius:6px;background:var(--surface);padding:5px 10px;min-width:0;width:220px;max-width:100%}
+.section-title{display:flex;align-items:baseline;gap:8px;margin:0;font-size:15px}
+.section-title small{color:var(--muted);font-weight:400;font-size:12px}
+/* board */
+.board-wrap{overflow-x:auto;margin-inline:-4px;padding:0 4px 6px}
+.board{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(244px,1fr);gap:10px;min-width:min-content}
+.col{background:var(--surface-2);border:1px solid var(--line);border-radius:8px;display:flex;flex-direction:column;min-width:0}
+.col-h{padding:10px 12px 8px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:2px}
+.col-h .t{display:flex;align-items:center;gap:6px;font-weight:600;font-size:13px}
+.col-h .t .n{margin-left:auto;font-family:var(--f-mono);font-size:12px;color:var(--muted);font-weight:500}
+.col-h .d{font-size:11.5px;color:var(--faint);line-height:1.4}
+.col.risk{background:var(--bad-soft);border-color:color-mix(in srgb,var(--bad) 30%,var(--line))}
+.col-b{padding:8px;display:flex;flex-direction:column;gap:8px}
+.code{font-family:var(--f-mono);font-size:11px;font-weight:600;padding:1px 5px;border-radius:4px;background:var(--surface);border:1px solid var(--line-strong);color:var(--muted)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:10px 11px 10px 13px;cursor:pointer;display:flex;flex-direction:column;gap:6px;position:relative;text-align:left;width:100%}
+.card:hover{border-color:var(--line-strong)}
+.card:focus-visible,.nav:focus-visible,button:focus-visible,tr:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.card::before{content:"";position:absolute;left:0;top:6px;bottom:6px;width:3px;border-radius:0 2px 2px 0;background:transparent}
+.card.sla-warn::before{background:var(--warn)} .card.sla-bad::before{background:var(--bad)}
+.card .r1{display:flex;align-items:center;gap:6px;min-width:0}
+.card .nm{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.card .r1 .rt{margin-left:auto;flex:none}
+.meta{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:12px;color:var(--muted)}
+.meta b{color:var(--ink);font-weight:500;font-family:var(--f-mono)}
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:1px 6px;border-radius:999px;border:1px solid var(--line-strong);color:var(--muted);white-space:nowrap}
+.chip.mv{border-color:color-mix(in srgb,var(--accent) 45%,transparent);color:var(--accent)}
+.chip.bad{background:var(--bad-soft);border-color:transparent;color:var(--bad)}
+.chip.warn{background:var(--warn-soft);border-color:transparent;color:var(--warn)}
+.chip.ok{background:var(--ok-soft);border-color:transparent;color:var(--ok)}
+.chip.solid{background:var(--accent);color:var(--accent-ink);border-color:transparent}
+.next{font-size:12px;display:flex;gap:6px;align-items:center;border-top:1px dashed var(--line);padding-top:6px;color:var(--muted)}
+.next .when{font-family:var(--f-mono);color:var(--ink)}
+.next .when.over{color:var(--bad);font-weight:600}
+.empty{font-size:12px;color:var(--faint);padding:10px 4px;text-align:center}
+/* table */
+.tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;min-width:980px}
+th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--line);vertical-align:middle;font-size:13px}
+th{font-size:11.5px;font-weight:500;color:var(--muted);background:var(--surface-2);white-space:nowrap;letter-spacing:.02em}
+td.num,th.num{text-align:right;font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+tbody tr{cursor:pointer} tbody tr:hover{background:var(--surface-2)}
+tbody tr:last-child td{border-bottom:0}
+.bar{position:relative;height:6px;background:var(--line);border-radius:3px;width:96px;overflow:hidden}
+.bar i{position:absolute;left:0;top:0;bottom:0;border-radius:3px;background:var(--accent)}
+.bar .goal{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--ink);opacity:.5}
+.share{display:flex;align-items:center;gap:8px;font-family:var(--f-mono);font-size:12.5px}
+.trucks{font-family:var(--f-mono);font-size:12px;color:var(--muted);white-space:nowrap}
+.trucks b{color:var(--ink);font-weight:500}
+/* booking queue */
+.queue{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:8px;background:var(--surface);overflow:hidden}
+.qrow{display:grid;grid-template-columns:70px minmax(0,1.4fr) minmax(0,1fr) minmax(0,1.2fr) 120px;gap:12px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line);cursor:pointer;background:none;border-left:0;border-right:0;border-top:0;text-align:left;width:100%}
+.qrow:last-child{border-bottom:0}
+.qrow:hover{background:var(--surface-2)}
+.qrow .why{font-size:12px;color:var(--muted)}
+.dd{font-family:var(--f-mono);font-weight:600;font-size:13px;padding:2px 8px;border-radius:4px;background:var(--surface-2);border:1px solid var(--line-strong);text-align:center}
+.dd.d4,.dd.d5{background:var(--bad-soft);color:var(--bad);border-color:transparent}
+.dd.d3{background:var(--warn-soft);color:var(--warn);border-color:transparent}
+.ruler{display:grid;grid-template-columns:repeat(6,1fr);gap:2px}
+.ruler i{height:5px;border-radius:1px;background:var(--line)}
+.ruler i.on{background:var(--accent)} .ruler i.now{background:var(--ink)}
+.slots{display:flex;gap:3px;align-items:center}
+.slots i{width:12px;height:12px;border-radius:2px;border:1px solid var(--line-strong)}
+.slots i.shown{background:var(--accent);border-color:var(--accent)}
+.slots i.hidden{background:repeating-linear-gradient(45deg,var(--line-strong) 0 2px,transparent 2px 4px)}
+/* log */
+.log{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:8px;background:var(--surface);overflow:hidden}
+.lrow{display:grid;grid-template-columns:110px 84px minmax(0,1fr) 110px;gap:12px;padding:10px 14px;border-bottom:1px solid var(--line);align-items:start;font-size:13px}
+.lrow:last-child{border-bottom:0}
+.lrow .ts{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.lrow .subj{font-weight:600;cursor:pointer;color:var(--accent);background:none;border:0;padding:0;text-align:left}
+.lrow .body{color:var(--muted);font-size:12.5px;margin-top:2px}
+.lrow .who{font-size:12px;color:var(--muted);text-align:right}
+.kind{font-size:11px;font-weight:600;padding:2px 7px;border-radius:4px;text-align:center;white-space:nowrap}
+.kind.stage{background:var(--accent-soft);color:var(--accent)}
+.kind.call{background:var(--ok-soft);color:var(--ok)}
+.kind.note{background:var(--warn-soft);color:var(--warn)}
+.kind.field{background:var(--surface-2);color:var(--muted);border:1px solid var(--line)}
+.kind.system{background:var(--surface-2);color:var(--faint);border:1px dashed var(--line-strong)}
+/* drawer */
+.scrim{position:fixed;inset:0;background:rgba(10,15,20,.35);z-index:20}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(560px,100%);background:var(--surface);z-index:21;box-shadow:var(--shadow);display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px)}
+.dh{padding:16px 20px 12px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:6px}
+.dh .top{display:flex;align-items:center;gap:8px}
+.dh h2{margin:0;font-size:18px;letter-spacing:-.01em;min-width:0}
+.dh .x{margin-left:auto;border:1px solid var(--line-strong);background:var(--surface);border-radius:6px;width:32px;height:32px;cursor:pointer;font-size:16px;flex:none}
+.db{overflow-y:auto;padding:16px 20px 40px;display:flex;flex-direction:column;gap:20px}
+.blk{display:flex;flex-direction:column;gap:10px}
+.blk h3{margin:0;font-size:12px;font-weight:600;letter-spacing:.06em;color:var(--muted)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.grid2 div{background:var(--surface);padding:8px 10px;display:flex;flex-direction:column}
+.grid2 span{font-size:11.5px;color:var(--muted)} .grid2 b{font-family:var(--f-mono);font-weight:600;font-size:15px}
+.form{display:flex;flex-direction:column;gap:10px;border:1px solid var(--line);border-radius:8px;padding:12px;background:var(--surface-2)}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.row>label{font-size:12px;color:var(--muted);min-width:64px}
+.f{display:flex;flex-direction:column;gap:4px;min-width:0;flex:1 1 140px}
+.f span{font-size:12px;color:var(--muted)}
+input[type=text],input[type=number],input[type=datetime-local],select,textarea{border:1px solid var(--line-strong);border-radius:6px;background:var(--surface);padding:6px 8px;min-width:0;width:100%}
+textarea{resize:vertical;min-height:64px}
+.radio{display:flex;flex-wrap:wrap;gap:6px}
+.radio button,.tag{border:1px solid var(--line-strong);background:var(--surface);border-radius:999px;padding:3px 11px;font-size:12.5px;cursor:pointer}
+.radio button[aria-pressed="true"],.tag[aria-pressed="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.btn{border:1px solid var(--line-strong);background:var(--surface);border-radius:6px;padding:6px 14px;cursor:pointer;font-weight:500}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.err{font-size:12px;color:var(--bad)}
+.ok-msg{font-size:12px;color:var(--ok)}
+.check{display:flex;flex-direction:column;gap:2px}
+.check label{display:flex;gap:8px;align-items:center;padding:4px 2px;font-size:13px;cursor:pointer}
+.pinned{border:1px solid color-mix(in srgb,var(--warn) 40%,var(--line));background:var(--warn-soft);border-radius:6px;padding:8px 10px;font-size:13px}
+.pinned b{font-size:11px;color:var(--warn);margin-right:6px}
+.tl{display:flex;flex-direction:column;gap:0;border-left:2px solid var(--line);margin-left:5px}
+.tl .it{position:relative;padding:0 0 12px 16px}
+.tl .it::before{content:"";position:absolute;left:-6px;top:5px;width:10px;height:10px;border-radius:50%;background:var(--surface);border:2px solid var(--line-strong)}
+.tl .it.stage::before{border-color:var(--accent);background:var(--accent)}
+.tl .it.call::before{border-color:var(--ok)}
+.tl .it.note::before{border-color:var(--warn)}
+.tl .h{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;font-size:13px}
+.tl .h b{font-weight:600}
+.tl .h .ts{font-family:var(--f-mono);font-size:11.5px;color:var(--faint)}
+.tl .b{font-size:12.5px;color:var(--muted);white-space:pre-wrap}
+.flow{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:4px}
+.flow div{display:flex;flex-direction:column;gap:3px;font-size:11.5px;color:var(--faint);min-width:0}
+.flow div i{height:4px;border-radius:2px;background:var(--line)}
+.flow div.done{color:var(--ink)} .flow div.done i{background:var(--accent)}
+.flow div.cur{color:var(--accent);font-weight:600} .flow div.cur i{background:var(--accent);opacity:.45}
+.flow small{font-family:var(--f-mono);font-size:10.5px;color:var(--faint);font-weight:400}
+.quotes{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.q{display:grid;grid-template-columns:28px minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:8px 10px;border-bottom:1px solid var(--line);font-size:13px}
+.q:last-child{border-bottom:0}
+.q.hid{background:var(--surface-2);color:var(--faint)}
+.q.hid .nm{text-decoration:line-through}
+.q .rk{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.q .amt{font-family:var(--f-mono);font-weight:600}
+.rule{font-size:12px;color:var(--muted);background:var(--surface-2);border-radius:6px;padding:8px 10px}
+.toast{position:fixed;bottom:calc(20px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);background:var(--ink);color:var(--surface);padding:8px 16px;border-radius:6px;font-size:13px;z-index:30;box-shadow:var(--shadow)}
+@media (max-width:1100px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:820px){
+  .app{grid-template-columns:minmax(0,1fr)}
+  .rail{position:static;height:auto;flex-direction:row;flex-wrap:wrap;align-items:center;gap:10px 14px;padding:12px 16px}
+  .navgroup{flex-direction:row;flex-wrap:wrap;align-items:center}
+  .navgroup h6{display:none}
+  .rail-foot{margin:0;flex-direction:row;align-items:center;flex-wrap:wrap}
+  .main{padding-inline:16px}
+  .qrow{grid-template-columns:60px minmax(0,1fr);}
+  .qrow .hide-sm{display:none}
+  .lrow{grid-template-columns:78px minmax(0,1fr)}
+  .lrow .who,.lrow .kind-c{display:none}
+}
+@media (prefers-reduced-motion:no-preference){.drawer.anim{animation:slide .18s ease-out}@keyframes slide{from{transform:translateX(24px);opacity:.6}}}
+/* v0.2 additions: 콜 폼 · 터치 케이던스 · 콜 로그 */
+.step{display:flex;flex-direction:column;gap:6px}
+.step>.lbl{font-size:12px;font-weight:600;color:var(--muted);display:flex;gap:6px;align-items:center}
+.step>.lbl i{font-style:normal;font-family:var(--f-mono);width:18px;height:18px;border-radius:50%;background:var(--ink);color:var(--surface);display:inline-grid;place-items:center;font-size:11px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips button{border:1px solid var(--line-strong);background:var(--surface);border-radius:999px;padding:4px 12px;font-size:12.5px;cursor:pointer;display:inline-flex;gap:6px;align-items:center}
+.chips button[aria-pressed="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.chips button.suggest{border-color:var(--accent);border-style:dashed}
+.chips button .dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+.preview{border-radius:6px;padding:9px 11px;font-size:12.5px;background:var(--accent-soft);color:var(--ink);display:flex;flex-direction:column;gap:3px}
+.preview b{font-weight:600}
+.preview .rule{background:none;padding:0;color:var(--muted);font-family:var(--f-mono);font-size:11px}
+.recent{display:flex;flex-direction:column;gap:6px}
+.recent .rc{border-left:3px solid var(--line-strong);padding:4px 0 4px 10px;font-size:12.5px}
+.recent .rc .h{color:var(--muted);font-size:11.5px;font-family:var(--f-mono)}
+.recent .rc.connected{border-color:var(--ok)} .recent .rc.absent{border-color:var(--warn)} .recent .rc.fail{border-color:var(--bad)}
+.cadence{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:4px}
+.cadence .t{display:flex;flex-direction:column;gap:2px;border:1px solid var(--line);border-radius:6px;padding:6px 6px;font-size:11px;min-width:0;background:var(--surface)}
+.cadence .t b{font-family:var(--f-mono);font-size:12px}
+.cadence .t span{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cadence .t.done{background:var(--ok-soft);border-color:transparent}
+.cadence .t.due{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.cadence .t.over{background:var(--bad-soft);border-color:transparent}
+.cadence .t.skip{opacity:.45}
+.events{display:flex;flex-wrap:wrap;gap:6px}
+.tchip{font-size:11px;font-family:var(--f-mono);font-weight:600;padding:1px 6px;border-radius:4px;background:var(--accent-soft);color:var(--accent)}
+.tchip.over{background:var(--bad-soft);color:var(--bad)}
+.roi{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) minmax(0,1fr) auto;gap:6px;align-items:end}
+.roi-list{display:flex;flex-direction:column;gap:4px;font-size:12.5px}
+.roi-list div{display:flex;justify-content:space-between;gap:8px;border-bottom:1px dashed var(--line);padding:3px 0}
+/* call log */
+.cl-grid{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:12px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.panel h3{margin:0;font-size:13px;display:flex;gap:8px;align-items:baseline}
+.panel h3 small{font-weight:400;color:var(--muted);font-size:12px}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.chart svg{display:block;width:100%;height:auto;overflow:visible}
+.chart text{fill:var(--muted);font-family:var(--f-mono);font-size:10px}
+.chart .grid{stroke:var(--line);stroke-width:1}
+.chart rect.hit{fill:transparent;cursor:default}
+.chart rect.hit:hover{fill:var(--ink);opacity:.05}
+.hm{display:grid;grid-template-columns:24px repeat(14,minmax(0,1fr));gap:2px;font-size:10px;font-family:var(--f-mono);color:var(--muted)}
+.hm .c{aspect-ratio:1;border-radius:2px;background:var(--surface-2);border:1px solid var(--line)}
+.hm .c.v{border:0}
+.hm .hd{text-align:center}
+.tipbox{position:fixed;z-index:40;pointer-events:none;background:var(--ink);color:var(--surface);font-size:12px;padding:6px 9px;border-radius:5px;box-shadow:var(--shadow);white-space:nowrap}
+.stack{display:flex;height:8px;border-radius:4px;overflow:hidden;width:120px;gap:2px;background:var(--surface)}
+.stack i{display:block;height:100%}
+.res-list{display:flex;flex-direction:column;gap:6px}
+.res-list .r{display:grid;grid-template-columns:minmax(0,1fr) 110px 32px;gap:8px;align-items:center;font-size:12.5px}
+.res-list .r .b{height:6px;border-radius:3px;background:var(--line);overflow:hidden}
+.res-list .r .b i{display:block;height:100%}
+.res-list .r .n{font-family:var(--f-mono);text-align:right}
+.ledger table{min-width:1100px}
+.ledger td{vertical-align:top}
+.ledger tr.day td{background:var(--surface-2);font-size:12px;color:var(--muted);font-weight:600;cursor:default}
+.ledger .out{font-weight:600}
+.ledger .out.connected{color:var(--ok)} .ledger .out.absent{color:var(--warn)} .ledger .out.fail,.ledger .out.dead,.ledger .out.refuse{color:var(--bad)}
+.ledger .memo{max-width:320px;color:var(--muted);font-size:12.5px;white-space:normal}
+.ledger .subj{background:none;border:0;padding:0;color:var(--accent);font-weight:600;cursor:pointer;text-align:left;white-space:nowrap}
+.ledger td:nth-child(2),.ledger td:nth-child(4),.ledger td:nth-child(5){white-space:nowrap}
+.ledger .st{font-family:var(--f-mono);font-size:12px;white-space:nowrap}
+.ledger .st b{color:var(--accent)}
+.ledger tr.sms td{color:var(--muted)}
+.mod{font-size:11px;padding:1px 6px;border-radius:4px;border:1px solid var(--line-strong);white-space:nowrap}
+@media (max-width:1100px){.cl-grid{grid-template-columns:minmax(0,1fr)}.cadence{grid-template-columns:repeat(4,minmax(0,1fr))}}
+</style>
+
+</head><body><div class="app">
+  <nav class="rail" aria-label="모듈">
+    <div class="brand"><b>이사 콘솔</b><span>가정이사 · AM · 예약콜 · v0.2</span></div>
+    <div class="navgroup"><h6>AM</h6>
+      <a class="nav" href="#am-new" data-view="am-new">신규 정착 <span class="cnt" id="c-new"></span></a>
+      <a class="nav" href="#am-active" data-view="am-active">캐파 확대 <span class="cnt" id="c-active"></span></a>
+    </div>
+    <div class="navgroup"><h6>예약콜 · 미소방문</h6>
+      <a class="nav" href="#booking" data-view="booking">예약콜 큐 <span class="cnt" id="c-book"></span></a>
+    </div>
+    <div class="navgroup"><h6>기록</h6>
+      <a class="nav" href="#calls" data-view="calls">콜 로그 <span class="cnt" id="c-log"></span></a>
+    </div>
+    <div class="rail-foot">
+      <label for="actor">작업자로 보기</label>
+      <select id="actor"></select>
+      <span class="sample">시안 · 샘플 데이터</span>
+    </div>
+  </nav>
+  <main class="main" id="main"></main>
+</div>
+<div id="overlay" hidden></div>
+<div class="toast" id="toast" hidden></div>
+<div class="tipbox" id="tip" hidden></div>
+
+<script>
+(()=>{
+/* ================= 기본 ================= */
+const NOW = new Date('2026-09-30T10:40:00+09:00');
+const DAY = 864e5;
+const $ = s => document.querySelector(s);
+const esc = s => String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const at = (dOff, hh=10, mm=0) => { const d=new Date(NOW.getTime()+dOff*DAY); d.setHours(hh,mm,0,0); return d; };
+const pad = n => String(n).padStart(2,'0');
+const fmtD = d => `${d.getMonth()+1}/${pad(d.getDate())}`;
+const fmtDT = d => `${fmtD(d)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const won = n => (n/10000).toLocaleString('ko-KR',{maximumFractionDigits:1})+'만';
+const dayDiff = from => { const a=new Date(from); a.setHours(0,0,0,0); const b=new Date(NOW); b.setHours(0,0,0,0); return Math.round((b-a)/DAY); };
+const sameDay = (a,b) => ymd(a)===ymd(b);
+const toLocalInput = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+let seed = 7; const rnd = () => { seed = (seed*16807) % 2147483647; return (seed-1)/2147483646; };
+const pick = arr => arr[Math.floor(rnd()*arr.length)];
+let gid = 1000; const newGroup = () => 'cg-'+(++gid);
+
+const STAFF = [
+  {id:'s1',name:'황선혜',role:'mv4'},{id:'s2',name:'정찬영',role:'mv5'},{id:'s3',name:'이희원',role:'mv8'},
+  {id:'s4',name:'이지웅',role:'mv3'},{id:'s5',name:'손재혁',role:'mv2'}];
+const staffName = id => (STAFF.find(s=>s.id===id)||{}).name||'시스템';
+let actor = 's1';
+
+/* ================= 사전 (기존 miso-console 계승) ================= */
+const CONNECT = [['connected','🟢 연결됨'],['absent','부재중'],['dead','결번·없는 번호'],['refuse','수신 거부'],['etc','기타']];
+const CONNECT_L = Object.fromEntries(CONNECT.map(([k,l])=>[k,l.replace('🟢 ','')]));
+const RESULT_L = {go:'진행',hold:'보류',fail:'실패'};
+const DICT = {
+  am_new:{ go:'합의한 액션 있음', hold:['통화 곤란 — 재통화','고민해본다 함','현장 작업 중','충전 여력 없음'], fail:['미소 비중 축소 의사','타 플랫폼 전환','폐업·휴업','불만 — 전화 금지 요청','기타'] },
+  am_active:{ go:'투입 확대 합의', hold:['통화 곤란 — 재통화','성수기 이후 논의','팀 사정 확인 후 회신'], fail:['투입 축소 의사','타 플랫폼 전환','불만 — 전화 금지 요청','기타'] },
+  booking:{ go:'확정 의사 — 파트너 선택 안내', hold:['고민 중'], fail:['타사 계약','가격','이사 취소·연기','직접 해결','기타'] },
+};
+const MOD_L = {am_new:'신규 정착',am_active:'캐파 확대',booking:'예약콜'};
+const AM_STATE = {
+  A:{n:'순항 중',d:'선택받고 고객과 연결됨'}, B:{n:'연결 실패',d:'선택 후 48h 고객 미통화'},
+  C:{n:'참여 중 · 성과 없음',d:'견적은 내는데 선택 못 받음'}, D:{n:'참여 끊김',d:'3일 넘게 견적 없음'}, E:{n:'잔액 소진 임박',d:'잔액 3만원 미만'} };
+const VOC_TAGS = ['가격경쟁 심함','요청 품질 불신','앱·절차 어려움','정산·환불 불만','물량 부족','기타'];
+const RX_CODES = ['견적가 조정','프로필 완성','재참여 유도','환불 대행','재충전 대화','방문 준비 지원','기대치 맞추기','기타'];
+const HESIT = ['가격 높음','견적 편차 큼','파트너 신뢰','날짜 미정','가족 상의','타사 비교 중'];
+const LOST_MAP = {'타사 계약':'other_company','가격':'price','이사 취소·연기':'cancel_postpone','직접 해결':'self_solved','기타':'etc'};
+const TOUCH = [
+  {k:'W0',t:'웰컴콜',off:null,must:true,ok:'서비스 유형·지역·일정 확인'},
+  {k:'D1',t:'첫 참여 리뷰',off:1,must:true,ok:'프로필 마감 or 액션 1개 합의'},
+  {k:'D2',t:'선택 분기 체크',off:2,must:false,ok:'상태 판정'},
+  {k:'D3',t:'환불·신뢰',off:3,must:false,ok:'B 환불 접수'},
+  {k:'D7',t:'첫 주 결산',off:7,must:true,ok:'현장 의견 태그 기록'},
+  {k:'D14',t:'상태 기반',off:14,must:false,ok:'🟡🔴 처방 합의'},
+  {k:'D21',t:'재충전 사전',off:21,must:true,ok:'재충전 의사 확인'},
+  {k:'D30',t:'졸업 판정',off:30,must:true,ok:'졸업 사유 기록'}];
+const EVENTS = {EV_SELECTED:'⚡ 첫 선택 — 당일 축하·방문 준비',EV_48H:'⚡ 48h 접촉 불명 — 환불 도와주기',EV_ATBAT:'⚡ 잔액 소진 임박 — 재충전 대화',EV_LOST3:'⚡ 미성사 3건 — 견적가·프로필 피드백'};
+const PURPOSE = {am_new:['웰컴콜','세팅 안내','견적 독려','미성사 피드백','축하 · 리뷰 요청','재케어'],am_active:['주간 투입 점검','캐파 인터뷰','수동매칭','1초견적 업셀','클레임 지원','재케어'],booking:['1차 예약콜','재통화','확정 확인','이탈 사유 확인']};
+
+/* ================= 스테이지 ================= */
+const NEW_STAGES = [
+  {c:'N0',t:'첫 충전 · 배정',d:'충전 24h 내 웰컴콜',sla:1},{c:'N1',t:'프로필·리뷰 세팅',d:'체크리스트 5개 완료',sla:3},
+  {c:'N2',t:'첫 견적 대기',d:'견적 1건 제출 시 자동 이동',sla:7},{c:'N3',t:'제출 · 미성사',d:'미성사 피드백 · 격려',sla:14},
+  {c:'N4',t:'첫 계약 성공',d:'첫 이사 완료 시 자동 이동',sla:10},{c:'N5',t:'첫 리뷰 확보',d:'리뷰 1건 + 평점 4.5↑',sla:7}];
+const ACTIVE_STAGES = [{c:'A1',t:'캐파 미파악'},{c:'A2',t:'캐파 파악 완료'},{c:'A3',t:'투입 확대 중'},{c:'A4',t:'핵심 파트너'},{c:'A_RISK',t:'이탈 위험'}];
+const BOOK_STAGES = [
+  {c:'B0',t:'견적 수집 중',d:'방문 완료, 파트너 견적 대기'},{c:'B1',t:'콜 대상',d:'노출 견적 있음 · 고객 미확정'},
+  {c:'B2',t:'통화 · 고민 중',d:'재통화 예약 필수'},{c:'B3',t:'부재',d:'부재 정책으로 자동 재시도'},
+  {c:'B4_WON',t:'계약 확정',d:''},{c:'BX_LOST',t:'이탈',d:''},{c:'B_EXPIRED',t:'기한 만료',d:'D+5 경과'}];
+const ALL_ST = [...NEW_STAGES,...ACTIVE_STAGES,...BOOK_STAGES,{c:'N_RISK',t:'정착 위험'},{c:'N_CHURN',t:'이탈'}];
+const stageLabel = c => (ALL_ST.find(s=>s.c===c)||{t:c}).t;
+const CLOSED = ['N_CHURN','BX_LOST','B4_WON','B_EXPIRED'];
+const CHECK = [['profile_photo','프로필 사진'],['intro','소개문 · 포함 서비스'],['reviews_migrated','기존 리뷰 이관'],['instant_quote','1초견적 설정'],['regions_days','가능 지역 · 일자 파악']];
+
+/* ================= 샘플 데이터 ================= */
+const P = {}; const O = {}; const LOG = [];
+const modOf = x => x.kind==='order' ? 'booking' : (x.track==='active'?'am_active':'am_new');
+function addP(o){ P[o.id]=Object.assign({kind:'partner',notes:[],tl:[]},o); }
+[
+ ['P-40211','다온이사','강서구',['mv'],'N0',0,0,{s:0,w:0},null,0,180000,false,null,{}],
+ ['P-40207','든든한이사 강서','양천구',['mv','vq'],'N0',1,1,{s:0,w:0},null,0,300000,false,null,{}],
+ ['P-40198','청솔이사','노원구',['mv'],'N1',3,2,{s:0,w:0},4.8,6,250000,false,null,{profile_photo:1,intro:1}],
+ ['P-40190','해솔용달이사','은평구',['mv','vq'],'N1',6,5,{s:0,w:0},null,0,120000,false,null,{profile_photo:1}],
+ ['P-40177','나래익스프레스','송파구',['mv'],'N3',9,2,{s:2,w:0},4.9,12,410000,true,2,{profile_photo:1,intro:1,reviews_migrated:1,instant_quote:1,regions_days:1}],
+ ['P-40169','소담이사','관악구',['mv'],'N2',13,9,{s:0,w:0},null,0,90000,true,null,{profile_photo:1,intro:1,reviews_migrated:1,instant_quote:1,regions_days:1}],
+ ['P-40151','가온물류','마포구',['mv','vq'],'N3',16,8,{s:5,w:0},4.6,3,220000,true,8,{profile_photo:1,intro:1,reviews_migrated:1,instant_quote:1,regions_days:1}],
+ ['P-40146','늘봄이사','동작구',['mv'],'N3',19,12,{s:9,w:0},4.7,8,24000,true,13,{profile_photo:1,intro:1,reviews_migrated:1,instant_quote:1,regions_days:1}],
+ ['P-40133','푸른별이사','강동구',['mv'],'N4',24,3,{s:7,w:1},4.8,10,340000,true,7,{profile_photo:1,intro:1,reviews_migrated:1,instant_quote:1,regions_days:1}],
+ ['P-40120','한빛이사','성북구',['mv','vq'],'N5',31,6,{s:11,w:2},4.9,14,280000,true,21,{profile_photo:1,intro:1,reviews_migrated:1,instant_quote:1,regions_days:1}],
+ ['P-40115','바른손이사','구로구',['mv'],'N_RISK',27,15,{s:3,w:0},null,0,0,false,15,{profile_photo:1,intro:1}],
+].forEach(([id,name,region,svc,stage,charged,stageDays,q,rating,reviews,balance,iq,fq,ck])=>{
+  const checklist={}; CHECK.forEach(([k])=>checklist[k]=!!ck[k]);
+  addP({id,name,region,svc,track:'new',stage,charged:at(-charged,9),stageAt:at(-stageDays,9),q,rating,reviews,balance,iq,
+    firstQuote: fq!=null? at(-fq,15):null, owner:'s1', checklist, next:null});
+});
+[
+ ['P-38802','믿음이사 송파','송파구','A4',{teams:6,trucks:{'1t':1,'2.5t':3,'5t':4,'5t+':1},reg:14,daily:8,jpd:1,days:22},{req:58,sub:52,con:61},55,[64,70,78,81,88,90],'s2',[{name:'타사 A',rev:9000000,spend:600000}]],
+ ['P-38740','한결이사','강남구','A3',{teams:4,trucks:{'1t':0,'2.5t':2,'5t':3,'5t+':0},reg:9,daily:6,jpd:1,days:22},{req:64,sub:38,con:21},35,[40,44,51,55,58,59],'s2',[{name:'타사 A',rev:12000000,spend:900000},{name:'자체 영업',rev:15000000,spend:0}]],
+ ['P-38711','온새미로익스프레스','서초구','A3',{teams:3,trucks:{'1t':1,'2.5t':2,'5t':1,'5t+':0},reg:5,daily:5,jpd:1.5,days:22},{req:47,sub:22,con:14},30,[52,50,49,47,48,47],'s3',[]],
+ ['P-38690','라온이사','영등포구','A2',{teams:2,trucks:{'1t':1,'2.5t':1,'5t':1,'5t+':0},reg:4,daily:3,jpd:1,days:22},{req:31,sub:12,con:6},null,[30,33,35,36,38,39],'s3',[]],
+ ['P-38655','대성익스프레스','광진구','A_RISK',{teams:5,trucks:{'1t':0,'2.5t':2,'5t':4,'5t+':2},reg:12,daily:10,jpd:1,days:22},{req:52,sub:9,con:4},40,[71,66,58,41,24,17],'s2',[{name:'타사 B',rev:14000000,spend:1100000}]],
+ ['P-38631','새길이사','중랑구','A1',null,{req:28,sub:17,con:3},null,[55,58,61,60,61,61],'s3',[]],
+ ['P-38604','우리동네이사','도봉구','A4',{teams:2,trucks:{'1t':1,'2.5t':2,'5t':0,'5t+':0},reg:4,daily:2,jpd:1.5,days:22},{req:39,sub:36,con:27},25,[85,88,90,92,91,92],'s3',[]],
+ ['P-38590','미래로이사','용산구','A1',null,{req:22,sub:6,con:2},null,[30,28,31,27,29,27],'s2',[]],
+].forEach(([id,name,region,stage,cap,month,target,trend,owner,roi],i)=>{
+  addP({id,name,region,svc:['mv','vq'],track:'active',stage,stageAt:at(-10,9),cap,month,target,trend,owner,roi,
+    rating:[4.8,4.7,4.9,4.6,4.5,4.7,4.9,4.6][i],reviews:[132,88,54,31,97,40,76,22][i],balance:[520000,310000,240000,150000,40000,280000,190000,90000][i],iq:stage!=='A_RISK',
+    dailyMax: cap? cap.teams*3:null, deadline: cap?14:null, next:null});
+});
+const PN = id => (P[id]||{}).name||id;
+const qpool = ['P-38802','P-38740','P-38711','P-40151','P-40146','P-38604','P-40133','P-40120','P-38690','P-40177'];
+function mkQuotes(n, base, s){ const out=[]; for(let i=0;i<n;i++){ const pid=qpool[(s+i*3)%qpool.length]; if(out.find(q=>q.pid===pid)) continue;
+  out.push({pid, amount: Math.round((base*(0.86+((s*7+i*13)%30)/100))/10000)*10000, rank:[4.9,4.8,4.7,4.6,4.4,4.1][(s+i)%6]-((s+i)%3)*.05, at:at(-1,12+i)}); } return out; }
+[
+ ['MV-260930-014','김**','강서구 화곡동',24,at(18),0,'이정우',0,'B0',[]],
+ ['MV-260930-009','박**','마포구 성산동',32,at(12),0,'최민석',2,'B0',[]],
+ ['MV-260929-021','이**','송파구 가락동',34,at(9),-1,'이정우',6,'B1',[]],
+ ['MV-260929-017','정**','강동구 명일동',28,at(25),-1,'한도윤',3,'B1',[]],
+ ['MV-260928-011','최**','서초구 방배동',41,at(6),-2,'최민석',5,'B2',['가족 상의','견적 편차 큼']],
+ ['MV-260928-004','강**','동작구 사당동',25,at(14),-2,'한도윤',4,'B3',[]],
+ ['MV-260927-019','윤**','관악구 봉천동',22,at(4),-3,'이정우',6,'B2',['가격 높음']],
+ ['MV-260926-008','장**','성북구 길음동',30,at(11),-4,'최민석',3,'B3',['날짜 미정']],
+ ['MV-260925-015','임**','영등포구 여의도동',38,at(3),-5,'한도윤',5,'B2',['타사 비교 중']],
+ ['MV-260927-002','한**','광진구 자양동',27,at(8),-3,'이정우',4,'B4_WON',['가격 높음']],
+ ['MV-260926-013','오**','용산구 이촌동',35,at(2),-4,'최민석',6,'BX_LOST',['타사 비교 중']],
+ ['MV-260924-006','서**','도봉구 창동',26,at(1),-6,'한도윤',2,'B_EXPIRED',['날짜 미정']],
+ ['MV-260923-010','문**','양천구 목동',31,at(-2),-7,'이정우',4,'B4_WON',[]],
+ ['MV-260922-003','배**','송파구 잠실동',33,at(-4),-8,'최민석',5,'B4_WON',['견적 편차 큼']],
+ ['MV-260921-012','조**','노원구 상계동',24,at(-6),-9,'한도윤',3,'BX_LOST',['가격 높음']],
+ ['MV-260920-007','신**','강서구 등촌동',29,at(-7),-10,'이정우',4,'B4_WON',[]],
+].forEach(([id,cust,region,py,move,d0,planner,nq,stage,tags],i)=>{
+  O[id]={kind:'order',id,cust,region,py,move,d0:at(d0,10+(i%5)),requested:at(d0-3,20),released:at(d0,17),planner,quotes:mkQuotes(nq,py*42000,i+2),
+    stage,owner:'s4',tags,stageAt:at(Math.min(0,d0+2),15),notes:[],tl:[],won:null,lost:stage==='BX_LOST'?'other_company':null,next:null};
+});
+function curated(o){ return [...o.quotes].sort((a,b)=>b.rank-a.rank||a.at-b.at).map((q,i)=>({...q,shown:i<4,pos:i+1})); }
+Object.values(O).forEach(o=>{ if(o.stage==='B4_WON'){ const c=curated(o).filter(q=>q.shown); const w=c[1]||c[0]; o.won={pid:w.pid,amount:w.amount,byCall:true}; }});
+
+/* ---------- 기록: 통합 원장 ---------- */
+function push(e, front){ const tgt = e.subject==='partner'?P[e.sid]:O[e.sid]; e.module = e.module || modOf(tgt); (front?LOG.unshift(e):LOG.push(e)); if(tgt) (front?tgt.tl.unshift(e):tgt.tl.push(e)); return e; }
+const callsOf = x => x.tl.filter(e=>e.type==='call');
+const attemptNo = x => callsOf(x).length+1;
+
+// 과거 14일 콜 이력 생성 (샘플) — 시간대별 연결률 차이를 넣어 히트맵이 의미 있게
+const hourBias = h => h<10?0.30: h<12?0.55: h<14?0.35: h<17?0.60: h<19?0.45: 0.25;
+function simCall(x, when, who, opts={}){
+  const mod=modOf(x); const pBias = mod==='booking'?0.1:0;
+  const r=rnd(); const pc=Math.min(.85,hourBias(when.getHours())+pBias);
+  let connect = opts.connect || (r<pc?'connected': r<pc+0.08?'etc': 'absent');
+  let result=null, reason=null, memo='', state=null, voc=[], rx=null;
+  if(connect==='connected'){
+    result = opts.result || (rnd()<0.55?'go':rnd()<0.8?'hold':'fail');
+    if(mod==='booking' && result==='fail' && !opts.result) result='hold';
+    if(result==='hold') reason = pick(DICT[mod].hold);
+    if(result==='fail') reason = pick(DICT[mod].fail);
+    memo = opts.memo || pick(mod==='booking'
+      ? ['견적 4개 비교 중, 가격 차이 설명 요청','상위 2곳 리뷰 차이 안내함','가족과 상의 후 오늘 저녁 결정','숨김 견적 대비 최저가 안내, 긍정적']
+      : mod==='am_new' ? ['프로필 사진 교체 합의, 오늘 중 업로드','견적가가 지역 평균 대비 높음 — 5% 조정 권유','첫 이사 준비물 안내','영상 견적 방식 적응 중, 질문 많음']
+      : ['다음 주 가용 팀 2개, 미소 투입 6건 목표','5t 1대 추가 예정 — 10월 투입 확대','타사 비중 줄일 의향 있음','성수기 전 1초견적 거리 확장 합의']);
+    if(mod==='am_new'){ state = x.q&&x.q.w>0?'A':x.q&&x.q.s>0?'C':'D'; voc = rnd()<0.6?[pick(VOC_TAGS)]:[]; rx = pick(RX_CODES); }
+  } else if(connect==='absent') memo = '';
+  else memo = '회선 불량, 재시도';
+  const e = push({type:'call', ts:when, subject:x.kind, sid:x.id, actor:who, group:newGroup(), attempt: attemptNo(x),
+    purpose: opts.purpose || pick(PURPOSE[mod]), touch: opts.touch||null, connect, result, reason, state, voc, rx, hes: mod==='booking'&&result==='hold'?x.tags.slice(0,2):[],
+    memo, stageAt: opts.stageAt||x.stage, stageAfter: opts.stageAfter||opts.stageAt||x.stage, next: opts.next|| (connect==='absent'? new Date(when.getTime()+2*3600e3) : result==='hold'? new Date(when.getTime()+DAY) : (connect==='connected'&&mod!=='booking'&&result!=='fail')? new Date(when.getTime()+7*DAY) : null), auto: connect==='absent'?'absence:+2h':null});
+  if(connect==='absent' && callsOf(x).filter(c=>c.connect==='absent').length===3) push({type:'sms',ts:new Date(when.getTime()+60000),subject:x.kind,sid:x.id,actor:who,title:'부재 문자 발송',memo:'3회째 부재 — 부재 문자 템플릿'});
+  return e;
+}
+function simHistory(){
+  // 신규 정착: 충전 이후 터치들
+  Object.values(P).filter(p=>p.track==='new').forEach(p=>{
+    push({type:'system',ts:p.charged,subject:'partner',sid:p.id,actor:null,title:'첫 충전 감지 → N0 생성',memo:'동기화 잡'});
+    if(p.stage==='N0' && dayDiff(p.charged)===0) return;
+    simCall(p, new Date(p.charged.getTime()+(p.stage==='N0'?26:3)*3600e3), 's1', {touch:'W0',purpose:'웰컴콜', connect: p.id==='P-40207'?'absent':'connected', result:'go', stageAt:'N0', stageAfter: p.stage==='N0'?'N0':'N1'});
+    if(p.stage!=='N0') push({type:'stage',ts:p.stageAt,subject:'partner',sid:p.id,actor: ['N3','N4'].includes(p.stage)?null:'s1',from:'…',to:p.stage,memo:p.stage==='N_RISK'?'부재 5회 — 자동 처리':'조건 충족',auto:p.stage==='N_RISK'?'absence:max':null});
+    if(p.firstQuote){ TOUCH.filter(t=>t.off!=null && p.firstQuote.getTime()+t.off*DAY < NOW.getTime()-3600e3).forEach(t=>{
+      if(!t.must && rnd()<0.5) return; if(p.id==='P-40151'&&t.k==='D7') return; // 한 건은 밀린 필수 터치 샘플
+      const when=new Date(p.firstQuote.getTime()+t.off*DAY); when.setHours(9+Math.floor(rnd()*10),Math.floor(rnd()*60));
+      simCall(p, when, 's1', {touch:t.k, purpose:t.t});
+    }); }
+    if(p.id==='P-40115'){ for(let k=0;k<4;k++) simCall(p, at(-5+k,11+k), 's1', {connect:'absent',purpose:'재케어'}); }
+  });
+  // 캐파 확대: 주간 점검
+  Object.values(P).filter(p=>p.track==='active').forEach(p=>{
+    for(let w=13; w>=0; w-=(p.stage==='A_RISK'?7:rnd()<0.5?3:4)){ const d=at(-w, 9+Math.floor(rnd()*10), Math.floor(rnd()*60)); if(d>NOW) continue;
+      simCall(p,d,p.owner,{touch:'WK',purpose:w%2?'주간 투입 점검':pick(PURPOSE.am_active)}); }
+  });
+  // 예약콜
+  Object.values(O).forEach(o=>{
+    push({type:'system',ts:o.requested,subject:'order',sid:o.id,actor:null,title:'고객 요청 생성',memo:`${o.region} · ${o.py}평 · 이사일 ${fmtD(o.move)}`});
+    push({type:'system',ts:o.d0,subject:'order',sid:o.id,actor:null,title:'플래너 방문 완료 (D0)',memo:`${o.planner} 플래너 촬영`});
+    if(o.quotes.length) push({type:'system',ts:new Date(o.released.getTime()+3*3600e3),subject:'order',sid:o.id,actor:null,title:`견적 ${o.quotes.length}건 제출 → 노출 ${Math.min(4,o.quotes.length)}건`,memo:o.quotes.length>4?`하위 ${o.quotes.length-4}건 숨김`:'전부 노출'});
+    if(o.stage==='B0') return;
+    push({type:'stage',ts:new Date(o.d0.getTime()+DAY),subject:'order',sid:o.id,actor:null,from:'B0',to:'B1',memo:'노출 후 24h 미확정',auto:'rule:b1_24h'});
+    const n = {B1:0,B2:2,B3:3,B4_WON:2,BX_LOST:2,B_EXPIRED:4}[o.stage]||0;
+    let st='B1';
+    for(let k=0;k<n;k++){ const last=k===n-1; const when=new Date(o.d0.getTime()+(k+1)*DAY); when.setHours(10+Math.floor(rnd()*9),Math.floor(rnd()*60));
+      if(when>NOW) break;
+      let opts={stageAt:st,purpose:k?'재통화':'1차 예약콜'};
+      if(o.stage==='B3') opts.connect='absent';
+      if(last && o.stage==='B4_WON') Object.assign(opts,{connect:'connected',result:'go',memo:'상위 견적 파트너로 확정하기로'});
+      if(last && o.stage==='BX_LOST') Object.assign(opts,{connect:'connected',result:'fail',memo:'타사 방문견적 받고 계약함'});
+      if(last && o.stage==='B2') Object.assign(opts,{connect:'connected',result:'hold'});
+      const e=simCall(o,when,'s4',opts);
+      let after = e.connect==='absent'?'B3': e.result==='fail'?'BX_LOST': e.connect==='connected'?'B2':st;
+      if(last && ['B4_WON','B_EXPIRED'].includes(o.stage)) after = o.stage==='B4_WON'?'B2':st;
+      e.stageAfter=after;
+      if(after!==st) push({type:'stage',ts:new Date(when.getTime()+1000),subject:'order',sid:o.id,actor:'s4',from:st,to:after,memo:'콜 결과 반영',auto:e.connect==='absent'?e.auto:null});
+      if(e.result==='fail') e.reason='타사 계약';
+      st=after;
+    }
+    if(o.stage==='B4_WON') push({type:'stage',ts:o.stageAt,subject:'order',sid:o.id,actor:null,from:'B2',to:'B4_WON',memo:`확정: ${PN(o.won.pid)} ${won(o.won.amount)}원 · 예약콜 기여`});
+    if(o.stage==='B_EXPIRED') push({type:'stage',ts:new Date(o.d0.getTime()+6*DAY),subject:'order',sid:o.id,actor:null,from:st,to:'B_EXPIRED',memo:'D+5 경과 자동 종료',auto:'rule:expire_d5'});
+  });
+  LOG.sort((a,b)=>b.ts-a.ts); [...Object.values(P),...Object.values(O)].forEach(x=>x.tl.sort((a,b)=>b.ts-a.ts));
+  // 다음 액션 (샘플)
+  const nx = {'P-40207':[0,12,40,'웰컴콜 재시도 (부재 정책)'],'P-40198':[1,14,0,'세팅 안내 — 리뷰 이관 확인'],'P-40190':[-1,15,0,'리뷰 캡처 받기'],'P-40177':[0,15,0,'D1 첫 참여 리뷰'],'P-40169':[-2,11,0,'견적 참여 독려'],'P-40151':[0,11,0,'D7 첫 주 결산 (밀림)'],'P-40146':[1,10,0,'잔액 소진 임박 — 재충전 대화'],'P-40133':[2,10,0,'첫 이사 전 체크콜'],'P-40120':[0,16,0,'D21 재충전 사전 대화'],'P-40115':[0,14,0,'재케어 — 부재 4회'],'P-40211':[0,11,0,'W0 웰컴콜']};
+  Object.values(P).forEach(p=>{ if(nx[p.id]) p.next={at:at(nx[p.id][0],nx[p.id][1],nx[p.id][2]),label:nx[p.id][3]}; else if(p.track==='active') p.next={at:at(p.stage==='A_RISK'?-2:Math.floor(rnd()*4),11),label:p.stage==='A1'?'캐파 인터뷰':'주간 투입 점검'}; });
+  const oc={ 'MV-260928-011':[0,15,0],'MV-260928-004':[0,13,0],'MV-260927-019':[0,11,0],'MV-260926-008':[0,10,30],'MV-260925-015':[0,16,0]};
+  Object.values(O).forEach(o=>{ if(oc[o.id]) o.next={at:at(...oc[o.id]),label:o.stage==='B3'?'부재 재시도':'예약된 재통화'}; });
+}
+simHistory();
+P['P-40151'].notes.push({kind:'special',body:'가격이 평균 대비 높게 들어감. 자재비 포함 견적 습관 — 포함 항목 분리 안내함.',pinned:true,ts:at(-2,16),actor:'s1'});
+P['P-38655'].notes.push({kind:'caution',body:'9월 3주차 고객 클레임(가구 파손) 처리 불만 — 클레임 지원 약속 후 미이행 여부 확인 필요.',pinned:true,ts:at(-9,11),actor:'s2'});
+P['P-38802'].notes.push({kind:'promise',body:'10월 손없는날(10/9·10/19) 우선 매칭 약속.',pinned:true,ts:at(-2,15),actor:'s2'});
+
+/* ================= 계산 ================= */
+const slaState = p => { const s=NEW_STAGES.find(x=>x.c===p.stage); if(!s) return ''; const d=dayDiff(p.stageAt); return d>s.sla?'sla-bad': d>=Math.ceil(s.sla*.7)?'sla-warn':''; };
+const monthlyCap = c => c? Math.floor(c.teams*c.jpd*c.days):null;
+const share = p => p.cap? p.month.con/monthlyCap(p.cap):null;
+const partRate = p => p.month.req? p.month.sub/p.month.req:0;
+const dplus = o => dayDiff(o.d0);
+const openBooking = o => ['B0','B1','B2','B3'].includes(o.stage);
+function callDue(o){
+  if(!openBooking(o)) return null;
+  if(o.stage==='B0') return o.quotes.length===0 ? {why:'견적 0건 · 공급 경고 (18시 기준)',t:at(0,18)} : null;
+  if(o.stage==='B1') return {why:'1차 예약콜 대기',t:new Date(o.d0.getTime()+DAY)};
+  if(o.next) return {why:o.stage==='B3'?'부재 재시도':'예약된 재통화', t:o.next.at};
+  return {why:'다음 콜 미예약',t:NOW};
+}
+// 터치 케이던스 상태
+function touches(p){
+  if(p.track!=='new') return [];
+  const done = k => p.tl.find(e=>e.type==='call' && e.touch===k && e.connect==='connected');
+  const tried = k => p.tl.find(e=>e.type==='call' && e.touch===k);
+  return TOUCH.map(t=>{
+    const due = t.off==null ? p.charged : (p.firstQuote? new Date(p.firstQuote.getTime()+t.off*DAY):null);
+    let st='todo';
+    if(done(t.k)) st='done'; else if(!due) st='wait'; else if(sameDay(due,NOW)) st='due'; else if(due<NOW) st = t.must?'over':'skip';
+    return {...t,due,st,tried:!!tried(t.k)};
+  });
+}
+function events(p){
+  if(p.track!=='new') return [];
+  const ev=[]; const doneEv=k=>p.tl.find(e=>e.touch===k);
+  if(p.q.w>=1 && !doneEv('EV_SELECTED')) ev.push('EV_SELECTED');
+  if(p.balance<30000 && !doneEv('EV_ATBAT')) ev.push('EV_ATBAT');
+  if(p.q.s>=3 && p.q.w===0 && !doneEv('EV_LOST3')) ev.push('EV_LOST3');
+  return ev;
+}
+function suggestState(p){ if(p.balance<30000) return 'E'; if(p.q.w>0) return 'A'; if(p.q.s>0) return 'C'; if(p.firstQuote) return 'D'; return null; }
+function nextTouch(p){ const ts=touches(p); return ts.find(t=>t.st==='over') || ts.find(t=>t.st==='due') || null; }
+
+/* 부재 정책 (기존 miso-console v20.93 + 예약콜 제안값) */
+function absencePlan(x, when=NOW){
+  const mod=modOf(x); const abs=callsOf(x).filter(c=>c.connect==='absent');
+  const tot=abs.length+1, today=abs.filter(c=>sameDay(c.ts,when)).length+1;
+  const P_ = mod==='booking' ? {lim:3,cut:19,sms:2} : {lim:2,cut:17,sms:3};
+  const tomorrow10 = new Date(when.getTime()+DAY); tomorrow10.setHours(10,0,0,0);
+  const r={tot,today,sms: tot===P_.sms, close: tot>=5};
+  if(r.close){ r.next=null; r.rule='absence:max'; r.text=`누적 부재 ${tot}회 → ${mod==='booking'?'이탈(연락 불가)':'위험 단계(재케어 큐)'} 자동 이동`; }
+  else if(today>=P_.lim){ r.next=tomorrow10; r.rule='absence:same_day_limit'; r.text=`오늘 ${today}회째 부재 → 내일 10:00 재시도`; }
+  else if(when.getHours()<P_.cut){ r.next=new Date(when.getTime()+2*3600e3); r.rule='absence:+2h'; r.text=`${P_.cut}시 전 → 2시간 뒤 ${fmtDT(r.next)} 재시도`; }
+  else { r.next=tomorrow10; r.rule='absence:after_cutoff'; r.text=`${P_.cut}시 이후 → 내일 10:00 재시도`; }
+  if(mod==='booking' && r.next){ const lim=new Date(x.d0.getTime()+5*DAY); lim.setHours(18,0,0,0); if(r.next>lim){ r.next=lim; r.text+=' (D+5 18:00로 당김)'; } }
+  if(r.sms) r.text += ` · ${mod==='booking'?'견적 도착 안내':'부재'} 문자 발송 기록`;
+  return r;
+}
+/* 콜 결과 → 스테이지 */
+function stageAfterCall(x, cf, plan){
+  const mod=modOf(x); const s=x.stage;
+  if(cf.connect==='absent') return plan.close ? (mod==='booking'?'BX_LOST':mod==='am_new'?'N_RISK':'A_RISK') : (mod==='booking'&&['B1','B2'].includes(s)?'B3':s);
+  if(cf.connect==='dead'||cf.connect==='refuse') return mod==='booking'?'BX_LOST':mod==='am_new'?'N_CHURN':'A_RISK';
+  if(cf.connect==='connected'){
+    if(cf.result==='fail') return mod==='booking'?'BX_LOST':mod==='am_new'?'N_CHURN':'A_RISK';
+    if(mod==='booking' && ['B1','B3'].includes(s) && cf.result) return 'B2';
+  }
+  return s;
+}
+
+/* ================= 렌더 ================= */
+let view='am-new', filter='all', q='';
+const main=$('#main');
+function kpis(list){ return `<div class="kpis" style="grid-template-columns:repeat(${list.length},minmax(0,1fr))">${list.map(k=>`<div class="kpi"><span class="l">${k.l}</span><span class="v ${k.c||''}">${k.v}</span><span class="s">${k.s||'&nbsp;'}</span></div>`).join('')}</div>`; }
+function header(t,sub){ return `<div class="head"><div><h1>${t}</h1><p>${sub}</p></div><span class="today">기준 ${fmtDT(NOW)} (수)</span></div>`; }
+function counts(){
+  $('#c-new').textContent=Object.values(P).filter(p=>p.track==='new'&&!CLOSED.includes(p.stage)).length;
+  $('#c-active').textContent=Object.values(P).filter(p=>p.track==='active').length;
+  const due=Object.values(O).filter(o=>{const d=callDue(o); return d&&d.t<=at(0,23,59);}).length;
+  const cb=$('#c-book'); cb.textContent=due; cb.classList.toggle('hot',due>0);
+  $('#c-log').textContent=new Set(LOG.filter(e=>e.type==='call'&&sameDay(e.ts,NOW)).map(e=>e.group)).size+' 오늘';
+  document.querySelectorAll('.nav').forEach(a=>a.setAttribute('aria-current',a.dataset.view===view?'page':'false'));
+}
+const svcChips = p => p.svc.map(s=>s==='mv'?'<span class="chip mv">미소방문</span>':'<span class="chip">방문견적</span>').join('');
+const matchQ = s => !q || s.toLowerCase().includes(q.toLowerCase());
+function toolbar(opts){ return `<div class="toolbar"><div class="seg" role="group">${opts.map(([k,l])=>`<button data-filter="${k}" aria-pressed="${filter===k}">${l}</button>`).join('')}</div><input class="search" id="q" type="text" placeholder="파트너·오더 검색" value="${esc(q)}"></div>`; }
+const lastCall = x => callsOf(x)[0];
+const lastCallLine = x => { const c=lastCall(x); if(!c) return ''; return `<div class="meta" style="font-size:11.5px"><span>☎ ${c.attempt}회차 · ${fmtD(c.ts)} ${esc(outcomeText(c))}</span></div>`; };
+function outcomeText(e){ if(e.connect!=='connected') return CONNECT_L[e.connect]; return RESULT_L[e.result]+(e.reason?': '+e.reason:''); }
+const outcomeCls = e => e.connect==='connected' ? (e.result==='fail'?'fail':'connected') : e.connect;
+
+function renderNew(){
+  const all=Object.values(P).filter(p=>p.track==='new' && !CLOSED.includes(p.stage));
+  const list=all.filter(p=>matchQ(p.name+p.region+p.id)&&(filter==='all'||(filter==='mine'&&p.owner===actor)||(filter==='late'&&slaState(p)==='sla-bad')||(filter==='touch'&&(nextTouch(p)||events(p).length))));
+  const late=all.filter(p=>slaState(p)==='sla-bad').length;
+  const touchDue=all.filter(p=>nextTouch(p)||events(p).length).length;
+  const card = p => { const due=p.next&&p.next.at<=at(0,23,59); const nt=nextTouch(p); const ev=events(p);
+    return `<button class="card ${slaState(p)}" data-open="p:${p.id}">
+      <div class="r1"><span class="nm">${esc(p.name)}</span><span class="rt meta"><b>D+${dayDiff(p.charged)}</b></span></div>
+      <div class="meta"><span>${esc(p.region)}</span>${svcChips(p)}${p.iq?'':'<span class="chip warn">1초견적 OFF</span>'}</div>
+      <div class="meta"><span>견적 <b>${p.q.s}</b></span><span>선택 <b>${p.q.w}</b></span><span>평점 <b>${p.rating??'–'}</b></span><span>잔액 <b>${won(p.balance)}</b></span></div>
+      ${(nt||ev.length)?`<div class="meta">${nt?`<span class="tchip ${nt.st==='over'?'over':''}">${nt.k} ${nt.t}${nt.st==='over'?' · 밀림':''}</span>`:''}${ev.map(k=>`<span class="tchip">${k.replace('EV_','⚡')}</span>`).join('')}</div>`:''}
+      ${lastCallLine(p)}
+      ${p.next?`<div class="next"><span class="when mono ${due?'over':''}">${fmtD(p.next.at)}</span><span>${esc(p.next.label)}</span></div>`:'<div class="next"><span class="when over">📌 팔로업 미등록</span></div>'}
+    </button>`; };
+  const cols = NEW_STAGES.map(s=>{ const items=list.filter(p=>p.stage===s.c);
+    return `<section class="col"><div class="col-h"><div class="t"><span class="code">${s.c}</span>${s.t}<span class="n">${items.length}</span></div><div class="d">${s.d} · SLA ${s.sla}일</div></div><div class="col-b">${items.map(card).join('')||'<div class="empty">없음</div>'}</div></section>`; }).join('');
+  const risk=list.filter(p=>p.stage==='N_RISK');
+  main.innerHTML = header('신규 정착','첫 충전한 파트너가 첫 계약과 첫 리뷰까지 가도록 1곳씩 끌고 갑니다. 카드의 파란 칩은 오늘 해야 할 AM 터치(D-케이던스), ⚡는 이벤트 터치입니다. 이탈(N_CHURN) 처리된 파트너는 모든 큐에서 빠집니다.')+
+    kpis([{l:'정착 진행 중',v:all.length,s:'이번 달 첫 충전 7곳'},{l:'오늘 할 터치',v:touchDue,s:'밀린 필수 터치 포함',c:touchDue?'bad':''},{l:'이번 달 첫 계약 도달',v:'4',s:'첫 충전 대비 36%',c:'ok'},{l:'SLA 초과',v:late,s:'오늘 처리 필요',c:late?'bad':''}])+
+    toolbar([['all','전체'],['mine','내 담당'],['touch','오늘 터치'],['late','SLA 초과']])+
+    `<div class="board-wrap"><div class="board">${cols}<section class="col risk"><div class="col-h"><div class="t"><span class="code">N!</span>정착 위험 · 재케어<span class="n">${risk.length}</span></div><div class="d">14일 견적 0 · 잔액 소진 · 부재 5회 · 평점 4.0 미만</div></div><div class="col-b">${risk.map(card).join('')||'<div class="empty">없음</div>'}</div></section></div></div>`;
+}
+function spark(arr){ const w=72,h=20; const pts=arr.map((v,i)=>`${(i/(arr.length-1)*w).toFixed(1)},${(h-v/100*h).toFixed(1)}`).join(' ');
+  const last=arr[arr.length-1]; const down=last<arr[0]-15;
+  return `<svg width="${w+4}" height="${h+4}" viewBox="-2 -2 ${w+4} ${h+4}" aria-label="주간 참여율 추이"><polyline points="${pts}" fill="none" stroke="${down?'var(--bad)':'var(--accent)'}" stroke-width="1.5"/><circle cx="${w}" cy="${(h-last/100*h).toFixed(1)}" r="2.2" fill="${down?'var(--bad)':'var(--accent)'}"/></svg>`; }
+function renderActive(){
+  const all=Object.values(P).filter(p=>p.track==='active');
+  const list=all.filter(p=>matchQ(p.name+p.region+p.id)&&(filter==='all'||(filter==='mine'&&p.owner===actor)||(filter==='risk'&&p.stage==='A_RISK')||(filter==='nocap'&&!p.cap)));
+  const order={A_RISK:0,A1:1,A3:2,A2:3,A4:4}; list.sort((a,b)=>order[a.stage]-order[b.stage]);
+  const withCap=all.filter(p=>p.cap); const totCap=withCap.reduce((s,p)=>s+monthlyCap(p.cap),0); const totCon=withCap.reduce((s,p)=>s+p.month.con,0);
+  const stChip = s => s==='A_RISK'?'<span class="chip bad">이탈 위험</span>':s==='A4'?'<span class="chip ok">핵심 파트너</span>':s==='A1'?'<span class="chip warn">캐파 미파악</span>':`<span class="chip">${stageLabel(s)}</span>`;
+  const rows=list.map(p=>{ const sh=share(p); const cap=p.cap; const tr=cap?cap.trucks:null; const goal=p.target&&cap? Math.min(1,p.target/monthlyCap(cap)):null; const lc=lastCall(p);
+    return `<tr tabindex="0" data-open="p:${p.id}">
+      <td><div style="font-weight:600">${esc(p.name)}</div><div style="font-size:12px;color:var(--muted)">${esc(p.region)} · <span class="mono">${p.id}</span></div></td>
+      <td>${stChip(p.stage)}</td><td class="num">${cap?cap.teams:'–'}</td>
+      <td>${tr?`<span class="trucks">1t <b>${tr['1t']}</b> · 2.5t <b>${tr['2.5t']}</b> · 5t <b>${tr['5t']}</b>${tr['5t+']?` · 5t+ <b>${tr['5t+']}</b>`:''}</span>`:'<span class="trucks">인터뷰 필요</span>'}</td>
+      <td class="num">${cap?cap.reg+cap.daily:'–'}</td><td class="num">${cap?monthlyCap(cap):'–'}</td>
+      <td class="num">${p.month.con}${p.target?`<span style="color:var(--faint)">/${p.target}</span>`:''}</td>
+      <td>${sh!=null?`<div class="share"><div class="bar"><i style="width:${Math.min(100,sh*100)}%;background:${sh>=.4?'var(--ok)':'var(--accent)'}"></i>${goal?`<span class="goal" style="left:${goal*100}%"></span>`:''}</div>${Math.round(sh*100)}%</div>`:'<span style="color:var(--faint)">–</span>'}</td>
+      <td class="num">${Math.round(partRate(p)*100)}%</td><td>${spark(p.trend)}</td>
+      <td style="font-size:12px">${lc?`<span class="mono">${fmtD(lc.ts)}</span> <span class="out ${outcomeCls(lc)}" style="color:var(--muted)">${esc(outcomeText(lc))}</span>`:'–'}</td>
+      <td class="num">${p.next?`<span class="mono" style="${p.next.at<=at(0,23,59)?'color:var(--bad);font-weight:600':''}">${fmtD(p.next.at)}</span>`:'<span style="color:var(--bad)">없음</span>'}</td>
+      <td>${staffName(p.owner)}</td></tr>`;}).join('');
+  main.innerHTML = header('캐파 확대','정착한 파트너의 전체 캐파(팀·톤수별 차량·인력)를 파악하고, 그중 미소에 쓰는 비중을 끌어올립니다. 투입률 = 이번 달 미소 계약 ÷ 월 캐파. 주 1회 투입 점검 콜(WK)에서 타사 플랫폼 ROI도 갱신합니다.')+
+    kpis([{l:'관리 파트너',v:all.length,s:`캐파 파악 ${withCap.length}곳`},{l:'평균 미소 투입률',v:Math.round(totCon/totCap*100)+'%',s:`계약 ${totCon} / 캐파 ${totCap}건`},{l:'핵심 파트너 (≥40%)',v:all.filter(p=>p.stage==='A4').length,c:'ok'},{l:'이탈 위험',v:all.filter(p=>p.stage==='A_RISK').length,s:'참여율 급감 · 부재 5회 · 실패',c:'bad'}])+
+    toolbar([['all','전체'],['mine','내 담당'],['nocap','캐파 미파악'],['risk','이탈 위험']])+
+    `<div class="tbl-wrap"><table><thead><tr><th>파트너</th><th>단계</th><th class="num">팀</th><th>차량 (톤수별)</th><th class="num">인력</th><th class="num">월 캐파</th><th class="num">9월 계약/목표</th><th>미소 투입률</th><th class="num">견적 참여율</th><th>6주 참여 추이</th><th>최근 콜</th><th class="num">📌 팔로업</th><th>담당</th></tr></thead><tbody>${rows||'<tr><td colspan="13" class="empty">없음</td></tr>'}</tbody></table></div>`;
+}
+function slots(o){ const n=o.quotes.length; return `<span class="slots" aria-label="견적 ${n}건 중 ${Math.min(4,n)}건 노출">${[0,1,2,3,4,5].map(i=>`<i class="${i<Math.min(4,n)?'shown':i<n?'hidden':''}"></i>`).join('')}</span>`; }
+function ruler(o){ const d=dplus(o); return `<span class="ruler" style="width:84px">${[0,1,2,3,4,5].map(i=>`<i class="${i<d?'on':i===d?'now':''}"></i>`).join('')}</span>`; }
+function renderBooking(){
+  const all=Object.values(O).filter(o=>dplus(o)<=7);
+  const list=all.filter(o=>matchQ(o.id+o.cust+o.region+o.planner)&&(filter==='all'||(filter==='mine'&&o.owner===actor)||(filter==='zero'&&o.quotes.length===0)));
+  const due=list.map(o=>({o,d:callDue(o)})).filter(x=>x.d).sort((a,b)=>dplus(b.o)-dplus(a.o)||a.d.t-b.d.t);
+  const closed=all.filter(o=>!openBooking(o));
+  const qrow = ({o,d}) => { const dd=dplus(o); const amts=curated(o).filter(x=>x.shown).map(x=>x.amount); const lc=lastCall(o);
+    return `<button class="qrow" data-open="o:${o.id}"><span class="dd d${dd}">D+${dd}</span>
+    <span style="min-width:0"><b>${esc(o.cust)} · ${esc(o.region)}</b><div class="why">${o.py}평 · 이사일 ${fmtD(o.move)} (${Math.round((o.move-NOW)/DAY)}일 남음) · <span class="mono">${o.id}</span></div></span>
+    <span class="hide-sm" style="display:flex;flex-direction:column;gap:4px">${slots(o)}<span class="why">${amts.length?`${won(Math.min(...amts))}~${won(Math.max(...amts))}원`:'견적 없음'}</span></span>
+    <span class="hide-sm"><span class="code">${o.stage}</span> <span class="why">${d.why}${lc?` · 직전: ${esc(outcomeText(lc))}`:''}</span></span>
+    <span class="hide-sm mono" style="text-align:right;${d.t<=NOW?'color:var(--bad);font-weight:600':''}">${d.t<=NOW?'지금':fmtDT(d.t)}<div class="why">콜 ${callsOf(o).length}회</div></span></button>`; };
+  const card = o => { const dd=dplus(o); const d=callDue(o);
+    return `<button class="card ${dd>=4&&openBooking(o)?'sla-bad':dd===3&&openBooking(o)?'sla-warn':''}" data-open="o:${o.id}">
+    <div class="r1"><span class="nm">${esc(o.cust)} · ${esc(o.region.split(' ')[0])}</span><span class="rt dd d${dd}" style="font-size:11px;padding:0 6px">D+${dd}</span></div>
+    <div class="meta"><span>${o.py}평</span><span>이사 <b>${fmtD(o.move)}</b></span><span>플래너 ${esc(o.planner)}</span></div>
+    <div class="meta" style="align-items:center">${slots(o)}<span>제출 <b>${o.quotes.length}</b> · 노출 <b>${Math.min(4,o.quotes.length)}</b></span></div>
+    ${o.quotes.length===0?'<div class="meta"><span class="chip bad">견적 0 · 수동매칭 요청</span></div>':''}
+    ${o.tags.length?`<div class="meta">${o.tags.map(t=>`<span class="chip">${esc(t)}</span>`).join('')}</div>`:''}
+    ${lastCallLine(o)}
+    ${o.stage==='B4_WON'?`<div class="next"><span class="chip ok">확정</span>${esc(PN(o.won.pid))} ${won(o.won.amount)}원</div>`:o.stage==='BX_LOST'?`<div class="next"><span class="chip bad">이탈</span>${esc(Object.keys(LOST_MAP).find(k=>LOST_MAP[k]===o.lost)||'연락 불가')}</div>`:o.stage==='B_EXPIRED'?'<div class="next">D+5 경과 · 자동 종료</div>':d?`<div class="next"><span class="when ${d.t<=NOW?'over':''}">${d.t<=NOW?'지금':fmtDT(d.t)}</span>${d.why}</div>`:'<div class="next">견적 수집 중</div>'}
+    </button>`; };
+  const cols = BOOK_STAGES.filter(s=>['B0','B1','B2','B3'].includes(s.c)).map(s=>{const items=list.filter(o=>o.stage===s.c).sort((a,b)=>dplus(b)-dplus(a));
+    return `<section class="col"><div class="col-h"><div class="t"><span class="code">${s.c}</span>${s.t}<span class="n">${items.length}</span></div><div class="d">${s.d}</div></div><div class="col-b">${items.map(card).join('')||'<div class="empty">없음</div>'}</div></section>`;}).join('');
+  const closedCol=`<section class="col"><div class="col-h"><div class="t"><span class="code">END</span>최근 종료<span class="n">${closed.length}</span></div><div class="d">확정 · 이탈 · 기한 만료 — 큐에서는 빠짐</div></div><div class="col-b">${list.filter(o=>!openBooking(o)).map(card).join('')||'<div class="empty">없음</div>'}</div></section>`;
+  const conv=bookingConversion();
+  main.innerHTML = header('예약콜 큐','미소방문 오더를 플래너 방문일(D0)부터 D+5까지 추적합니다. 견적이 노출됐는데 고객이 아직 고르지 않은 오더에 아웃바운드로 확정을 돕습니다. 부재는 부재 정책이 다음 시도 시각을 자동으로 잡습니다.')+
+    kpis([{l:'진행 중 오더',v:all.filter(openBooking).length,s:'D0 ~ D+5'},{l:'오늘 걸어야 할 콜',v:due.length,s:`기한 임박(D+4↑) ${due.filter(x=>dplus(x.o)>=4).length}건`,c:due.length?'bad':''},{l:'예약콜 연결 오더 확정률',v:conv.withCall+'%',s:`콜 없이 확정 ${conv.without}% (샘플)`,c:'ok'},{l:'견적 0 · 공급 경고',v:all.filter(o=>openBooking(o)&&o.quotes.length===0).length,s:'AM 수동매칭으로 넘어감'}])+
+    toolbar([['all','전체'],['mine','내 담당'],['zero','견적 0건']])+
+    `<h2 class="section-title">지금 걸 콜 <small>기한 임박 순 → 예약 시각 순</small></h2><div class="queue">${due.map(qrow).join('')||'<div class="empty">걸 콜이 없습니다</div>'}</div>
+    <div class="rule">견적 노출 규칙: 제출 0~4건은 전부 노출, 5건이면 하위 1건 · 6건이면 하위 2건을 숨기고 4건만 고객에게 보여줍니다. <span class="slots" style="display:inline-flex;vertical-align:middle"><i class="shown"></i></span> 노출 · <span class="slots" style="display:inline-flex;vertical-align:middle"><i class="hidden"></i></span> 숨김.</div>
+    <h2 class="section-title">스테이지 보드</h2><div class="board-wrap"><div class="board">${cols}${closedCol}</div></div>`;
+}
+function bookingConversion(){
+  const fin=Object.values(O).filter(o=>!openBooking(o));
+  const w=fin.filter(o=>callsOf(o).some(c=>c.connect==='connected')); const wo=fin.filter(o=>!callsOf(o).some(c=>c.connect==='connected'));
+  const r=a=>a.length?Math.round(a.filter(o=>o.stage==='B4_WON').length/a.length*100):0;
+  return {withCall:r(w), without: wo.length? r(wo) : 22};
+}
+
+/* ================= 콜 로그 ================= */
+const CL = {range:14, mod:'all', who:'all', conn:'all', moved:false, memo:false, types:['call','sms']};
+function clRows(){
+  const from = CL.range? new Date(NOW.getTime()-(CL.range-1)*DAY):new Date(0); from.setHours(0,0,0,0);
+  return LOG.filter(e=>CL.types.includes(e.type) && e.ts>=from && (CL.mod==='all'||e.module===CL.mod) && (CL.who==='all'||e.actor===CL.who)
+    && (CL.conn==='all'|| (e.type==='call' && (CL.conn==='fail'? e.result==='fail' : CL.conn==='other'? ['dead','refuse','etc'].includes(e.connect) : e.connect===CL.conn)))
+    && (!CL.moved || (e.type==='call' && e.stageAfter!==e.stageAt)) && (!CL.memo || (e.memo||'').trim())
+    && matchQ((e.subject==='partner'?PN(e.sid):e.sid+' '+(O[e.sid]||{}).cust)+' '+(e.memo||'')+' '+(e.purpose||'')));
+}
+function stats(rows){
+  const calls=rows.filter(e=>e.type==='call'); const g=new Map(); calls.forEach(e=>{ if(!g.has(e.group)) g.set(e.group,e); });
+  const u=[...g.values()]; const con=u.filter(e=>e.connect==='connected');
+  return { n:u.length, con:con.length, abs:u.filter(e=>e.connect==='absent').length, oth:u.filter(e=>['dead','refuse','etc'].includes(e.connect)).length,
+    fail:con.filter(e=>e.result==='fail').length, moved:u.filter(e=>e.stageAfter!==e.stageAt).length, movedCon:con.filter(e=>e.stageAfter!==e.stageAt).length,
+    touched:new Set(u.map(e=>e.subject+e.sid)).size, fu:u.filter(e=>e.next).length, list:u };
+}
+function tip(el,txt){ el.addEventListener('mousemove',ev=>{ const t=$('#tip'); t.textContent=txt; t.hidden=false; t.style.left=(ev.clientX+12)+'px'; t.style.top=(ev.clientY+12)+'px'; }); el.addEventListener('mouseleave',()=>{$('#tip').hidden=true;}); }
+function dailyChart(s){
+  const days=CL.range||14; const W=640,H=170,pl=28,pb=20,pt=8; const bw=(W-pl)/days;
+  const data=[]; for(let i=days-1;i>=0;i--){ const d=new Date(NOW.getTime()-i*DAY); const L=s.list.filter(e=>sameDay(e.ts,d));
+    data.push({d,con:L.filter(e=>e.connect==='connected').length,abs:L.filter(e=>e.connect==='absent').length,oth:L.filter(e=>!['connected','absent'].includes(e.connect)).length}); }
+  const max=Math.max(4,...data.map(x=>x.con+x.abs+x.oth)); const step=max>12?5:2; const top=Math.ceil(max/step)*step; const y=v=>pt+(H-pt-pb)*(1-v/top);
+  let g=''; for(let v=0;v<=top;v+=step) g+=`<line class="grid" x1="${pl}" x2="${W}" y1="${y(v)}" y2="${y(v)}"/><text x="${pl-6}" y="${y(v)+3}" text-anchor="end">${v}</text>`;
+  const bars=data.map((x,i)=>{ const bx=pl+i*bw+bw*.18, w=bw*.64; let yy=y(0); let out='';
+    [['con','var(--ok)'],['abs','var(--warn)'],['oth','var(--faint)']].forEach(([k,c])=>{ if(!x[k]) return; const h=y(0)-y(x[k]); out+=`<rect x="${bx}" y="${yy-h+1}" width="${w}" height="${Math.max(0,h-2)}" rx="2" fill="${c}"/>`; yy-=h; });
+    const lbl = (i%Math.ceil(days/7)===0||i===days-1)?`<text x="${bx+w/2}" y="${H-5}" text-anchor="middle">${fmtD(x.d)}</text>`:'';
+    return out+lbl+`<rect class="hit" data-tip="${fmtD(x.d)} · 콜 ${x.con+x.abs+x.oth} · 연결 ${x.con} · 부재 ${x.abs} · 기타 ${x.oth}" x="${pl+i*bw}" y="${pt}" width="${bw}" height="${H-pt-pb}"/>`; }).join('');
+  return `<div class="chart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="일자별 콜 결과">${g}${bars}</svg></div>`;
+}
+function heatmap(s){
+  const days=['월','화','수','목','금','토','일']; const hours=[...Array(14)].map((_,i)=>i+8);
+  const cell={}; s.list.forEach(e=>{ const dw=(e.ts.getDay()+6)%7, h=e.ts.getHours(); const k=dw+'-'+h; cell[k]=cell[k]||{n:0,c:0}; cell[k].n++; if(e.connect==='connected') cell[k].c++; });
+  let html='<div class="hm"><span></span>'+hours.map(h=>`<span class="hd">${h%2?'':h}</span>`).join('');
+  days.forEach((d,dw)=>{ html+=`<span>${d}</span>`; hours.forEach(h=>{ const c=cell[dw+'-'+h]; if(!c){ html+=`<span class="c"></span>`; return; }
+    const r=c.c/c.n; html+=`<span class="c v" data-tip="${d} ${h}시 · 콜 ${c.n} · 연결 ${c.c} (${Math.round(r*100)}%)" style="background:color-mix(in srgb,var(--accent) ${Math.round(15+r*85)}%,var(--surface))"></span>`; }); });
+  return html+'</div><div class="legend"><span>연결률</span><span><i style="background:color-mix(in srgb,var(--accent) 15%,var(--surface))"></i>0%</span><span><i style="background:color-mix(in srgb,var(--accent) 57%,var(--surface))"></i>50%</span><span><i style="background:var(--accent)"></i>100%</span><span>· 빈 칸 = 콜 없음</span></div>';
+}
+function renderCalls(){
+  const rows=clRows(); const s=stats(rows);
+  const byWho=STAFF.map(st=>({st, s:stats(rows.filter(e=>e.actor===st.id))})).filter(x=>x.s.n);
+  const outs={}; s.list.forEach(e=>{ const k=outcomeText(e); outs[k]=outs[k]||{n:0,cls:outcomeCls(e)}; outs[k].n++; }); const outList=Object.entries(outs).sort((a,b)=>b[1].n-a[1].n).slice(0,7); const omax=outList[0]?outList[0][1].n:1;
+  const clsColor={connected:'var(--ok)',absent:'var(--warn)',fail:'var(--bad)',dead:'var(--bad)',refuse:'var(--bad)',etc:'var(--faint)'};
+  const seg=(k,opts)=>`<div class="seg">${opts.map(([a,l])=>`<button data-cl="${k}" data-v="${a}" aria-pressed="${String(CL[k])===String(a)}">${l}</button>`).join('')}</div>`;
+  // 원장 (날짜 그룹)
+  let lastDay=''; let body='';
+  rows.slice(0,160).forEach(e=>{ const d=ymd(e.ts); if(d!==lastDay){ lastDay=d; const dd=stats(rows.filter(x=>ymd(x.ts)===d)); body+=`<tr class="day"><td colspan="11">${d} · 콜 ${dd.n} · 연결 ${dd.con} · 이동 ${dd.moved}</td></tr>`; }
+    const x = e.subject==='partner'?P[e.sid]:O[e.sid]; const nm = e.subject==='partner'?PN(e.sid):`${x.cust} · ${e.sid}`;
+    if(e.type==='sms'){ body+=`<tr class="sms"><td class="mono">${pad(e.ts.getHours())}:${pad(e.ts.getMinutes())}</td><td>${staffName(e.actor)}</td><td><button class="subj" data-open="${e.subject==='partner'?'p':'o'}:${e.sid}">${esc(nm)}</button></td><td></td><td><span class="mod">${MOD_L[e.module]}</span></td><td>💬 ${esc(e.title)}</td><td colspan="5" class="memo">${esc(e.memo||'')}</td></tr>`; return; }
+    const extra=[e.touch?`<span class="tchip">${e.touch}</span>`:'', e.state?`상태 ${e.state}`:'', (e.voc||[]).length?'의견 '+e.voc.join('·'):'', e.rx?'처방 '+e.rx:'', (e.hes||[]).length?'망설임 '+e.hes.join('·'):''].filter(Boolean).join(' · ');
+    body+=`<tr><td class="mono">${pad(e.ts.getHours())}:${pad(e.ts.getMinutes())}</td><td>${staffName(e.actor)}</td><td><button class="subj" data-open="${e.subject==='partner'?'p':'o'}:${e.sid}">${esc(nm)}</button></td>
+      <td class="mono">${e.attempt}회차</td><td><span class="mod">${MOD_L[e.module]}</span></td><td>☎ ${esc(e.purpose||'')}</td>
+      <td><span class="out ${outcomeCls(e)}">${esc(outcomeText(e))}</span></td>
+      <td class="st">${e.stageAt}${e.stageAfter!==e.stageAt?` → <b>${e.stageAfter}</b>`:''}</td>
+      <td class="memo">${e.memo?'✍ '+esc(e.memo):'<span style="color:var(--faint)">—</span>'}${extra?`<div style="margin-top:3px;font-size:11.5px">${extra}</div>`:''}</td>
+      <td class="mono" style="font-size:12px">${e.next?'📌 '+fmtDT(e.next):''}</td><td style="font-size:11px;color:var(--faint)" class="mono">${e.auto||''}</td></tr>`; });
+  main.innerHTML = header('콜 로그','콜·문자를 한 원장에서 봅니다. 콜 수는 통화 단위(call_group)로 세서, 한 통화로 여러 대상을 처리해도 1건입니다. 모든 기록은 파트너 ID · 오더 ID 기준으로 저장됩니다.')+
+    `<div class="toolbar">${seg('range',[[1,'오늘'],[7,'7일'],[14,'14일']])}${seg('mod',[['all','전체 모듈'],['am_new','신규 정착'],['am_active','캐파 확대'],['booking','예약콜']])}
+     <select id="cl-who" style="width:auto"><option value="all">전체 담당</option>${STAFF.map(st=>`<option value="${st.id}" ${CL.who===st.id?'selected':''}>${st.name}</option>`).join('')}</select>
+     ${seg('conn',[['all','모든 결과'],['connected','연결'],['absent','부재'],['fail','실패'],['other','결번·거부·기타']])}
+     <label style="font-size:13px;display:flex;gap:5px;align-items:center"><input type="checkbox" id="cl-moved" ${CL.moved?'checked':''}> 이동한 콜만</label>
+     <label style="font-size:13px;display:flex;gap:5px;align-items:center"><input type="checkbox" id="cl-memo" ${CL.memo?'checked':''}> 메모 있는 것만</label>
+     <input class="search" id="q" type="text" placeholder="대상·메모·목적 검색" value="${esc(q)}"></div>`+
+    kpis([{l:'콜 (통화 단위)',v:s.n,s:`연결 ${s.con} · 부재 ${s.abs} · 기타 ${s.oth}`},{l:'연결률',v:s.n?Math.round(s.con/s.n*100)+'%':'–',s:'연결 ÷ 콜'},{l:'스테이지 이동',v:s.moved,s:`연결 콜 중 ${s.movedCon}건 (${s.con?Math.round(s.movedCon/s.con*100):0}%) · 부재 자동 이동 포함`},{l:'접촉 대상',v:s.touched,s:'파트너·오더 유니크'},{l:'📌 팔로업 예약',v:s.fu,s:'팔로업 일시가 잡힌 콜'},{l:'실패',v:s.fail,s:'연결 후 실패·이탈',c:s.fail?'bad':''}])+
+    `<div class="cl-grid"><section class="panel"><h3>일자별 콜 결과 <small>막대에 올리면 수치</small></h3>${dailyChart(s)}<div class="legend"><span><i style="background:var(--ok)"></i>연결</span><span><i style="background:var(--warn)"></i>부재</span><span><i style="background:var(--faint)"></i>결번·거부·기타</span></div></section>
+     <section class="panel"><h3>요일 × 시간 연결률 <small>연결 잘 되는 시간대 찾기</small></h3>${heatmap(s)}</section></div>
+    <div class="cl-grid"><section class="panel"><h3>담당별 비교</h3><div class="tbl-wrap" style="border:0"><table style="min-width:560px"><thead><tr><th>담당</th><th class="num">콜</th><th class="num">연결률</th><th>결과 구성</th><th class="num">이동</th><th class="num">연결 중 이동</th><th class="num">팔로업</th></tr></thead><tbody>
+      ${byWho.map(({st,s:x})=>`<tr style="cursor:default"><td><b>${st.name}</b> <span style="color:var(--faint);font-size:12px">${st.role}</span></td><td class="num">${x.n}</td><td class="num">${Math.round(x.con/x.n*100)}%</td>
+      <td><span class="stack" title="연결 ${x.con-x.fail} · 실패 ${x.fail} · 부재 ${x.abs} · 기타 ${x.oth}">${[[x.con-x.fail,'var(--ok)'],[x.fail,'var(--bad)'],[x.abs,'var(--warn)'],[x.oth,'var(--faint)']].filter(a=>a[0]).map(([v,c])=>`<i style="flex:${v};background:${c}"></i>`).join('')}</span></td>
+      <td class="num">${x.moved}</td><td class="num">${x.con?Math.round(x.movedCon/x.con*100):0}%</td><td class="num">${x.fu}</td></tr>`).join('')}</tbody></table></div>
+      <div class="legend"><span><i style="background:var(--ok)"></i>연결(진행·보류)</span><span><i style="background:var(--bad)"></i>실패</span><span><i style="background:var(--warn)"></i>부재</span><span><i style="background:var(--faint)"></i>기타</span></div></section>
+     <section class="panel"><h3>결과 분포 <small>상위 7</small></h3><div class="res-list">${outList.map(([k,v])=>`<div class="r"><span>${esc(k)}</span><span class="b"><i style="width:${v.n/omax*100}%;background:${clsColor[v.cls]||'var(--accent)'}"></i></span><span class="n">${v.n}</span></div>`).join('')}</div></section></div>
+    <section class="ledger"><div class="tbl-wrap"><table><thead><tr><th>시각</th><th>담당</th><th>대상</th><th>회차</th><th>모듈</th><th>목적</th><th>결과</th><th>컨택 시 → 콜 후</th><th>메모 · 상태 · 태그</th><th>📌 팔로업</th><th>자동 규칙</th></tr></thead><tbody>${body||'<tr><td colspan="11" class="empty">조건에 맞는 기록 없음</td></tr>'}</tbody></table></div></section>`;
+  document.querySelectorAll('[data-tip]').forEach(el=>tip(el,el.dataset.tip));
+}
+function render(){ counts(); ({'am-new':renderNew,'am-active':renderActive,'booking':renderBooking,'calls':renderCalls})[view](); }
+
+/* ================= 드로어 ================= */
+let openKey=null; let CF=null;
+function resetCF(x){ const mod=modOf(x); const nt = x.kind==='partner'?nextTouch(x):null; const ev=x.kind==='partner'?events(x):[];
+  CF={connect:null,result:null,reason:null,state:x.kind==='partner'&&mod==='am_new'?null:null,voc:[],rx:null,hes:[...(x.tags||[])],memo:'',next:'',close:'',
+      touch: nt? nt.k : ev[0]||(mod==='am_active'?'WK':null), purpose: nt? nt.t : ev[0]? EVENTS[ev[0]].split(' — ')[0].replace('⚡ ','') : PURPOSE[mod][0], err:''}; }
+function timeline(x){ return `<div class="tl">${x.tl.slice(0,40).map(e=>{ const k=e.type==='call'?'call':e.type==='stage'?'stage':e.type==='note'?'note':'';
+  const title = e.type==='call'? `☎ ${e.attempt}회차 · ${e.purpose} · ${outcomeText(e)}` : e.type==='stage'? `${e.from} → ${e.to} ${stageLabel(e.to)}` : e.title||'';
+  const body = [e.memo, e.type==='call'&&e.next?`📌 팔로업 ${fmtDT(e.next)}`:'', e.auto?`규칙 ${e.auto}`:''].filter(Boolean).join('\n');
+  return `<div class="it ${k}"><div class="h"><b>${esc(title)}</b><span class="ts">${fmtDT(e.ts)} · ${staffName(e.actor)}</span></div>${body?`<div class="b">${esc(body)}</div>`:''}</div>`; }).join('')}</div>`; }
+function pinned(x){ const pn=x.notes.filter(n=>n.pinned); return pn.length?`<div class="blk">${pn.map(n=>`<div class="pinned"><b>${({special:'특이',claim:'클레임',promise:'약속',caution:'주의',correction:'정정'})[n.kind]}</b>${esc(n.body)}</div>`).join('')}</div>`:''; }
+function recentMemos(x){ const cs=callsOf(x).filter(c=>c.memo).slice(0,3); if(!cs.length) return '';
+  return `<div class="blk"><h3>최근 콜 메모</h3><div class="recent">${cs.map(c=>`<div class="rc ${outcomeCls(c)}"><div class="h">${fmtDT(c.ts)} · ${staffName(c.actor)} · ${c.attempt}회차 · ${esc(outcomeText(c))}</div>${esc(c.memo)}</div>`).join('')}</div></div>`; }
+function cadenceBlock(p){ if(p.track!=='new') return ''; const ts=touches(p); const ev=events(p);
+  return `<div class="blk"><h3>AM 터치 케이던스 <span style="font-weight:400;letter-spacing:0">점선 = 선택 터치 · D0 = 첫 견적 참여일 ${p.firstQuote?fmtD(p.firstQuote):'(아직 없음)'}</span></h3>
+  <div class="cadence">${ts.map(t=>`<div style="${t.must?'':'border-style:dashed'}" class="t ${t.st==='done'?'done':t.st==='due'?'due':t.st==='over'?'over':t.st==='skip'?'skip':''}" title="${esc(t.ok)}"><b>${t.k}</b><span>${t.t}</span><span class="mono">${t.st==='done'?'완료':t.st==='wait'?'대기':t.st==='skip'?'생략':t.due?fmtD(t.due):''}${t.st==='over'?' 밀림':''}</span></div>`).join('')}</div>
+  ${ev.length?`<div class="events">${ev.map(k=>`<span class="chip warn">${EVENTS[k]}</span>`).join('')}</div>`:''}</div>`; }
+function stageMover(opts,cur,extra=''){ return `<div class="blk"><h3>스테이지 수동 이동</h3><div class="form" id="mv-form">
+  <div class="row"><div class="f"><span>이동할 단계</span><select id="mv-to">${opts.map(s=>`<option value="${s.c}" ${s.c===cur?'selected':''}>${s.c} · ${s.t}</option>`).join('')}</select></div></div>${extra}
+  <div class="f"><span>사유 (필수 · 로그에 남음)</span><textarea id="mv-reason" rows="2" placeholder="예: 체크리스트 5개 완료"></textarea></div>
+  <div class="row"><button class="btn" data-act="move">단계 이동</button><span id="mv-msg"></span></div></div></div>`; }
+const chipBtns = (key, opts, cur, multi=false, sugg=null) => `<div class="chips">${opts.map(([v,l])=>`<button type="button" data-cf="${key}" data-v="${esc(v)}" ${multi?'data-multi="1"':''} class="${sugg===v?'suggest':''}" aria-pressed="${multi?(cur||[]).includes(v):cur===v}">${l}</button>`).join('')}</div>`;
+function callForm(x){
+  const mod=modOf(x); const D=DICT[mod]; const c=CF;
+  const plan = c.connect==='absent'? absencePlan(x) : null;
+  const after = c.connect? stageAfterCall(x,c,plan||{}) : x.stage;
+  // 다음 액션 기본값 제안
+  let autoNext=null, autoTxt='';
+  if(plan){ autoNext=plan.next; autoTxt=plan.text; }
+  else if(c.connect==='connected' && mod==='booking' && c.result==='go'){ autoNext=new Date(NOW.getTime()+3*3600e3); autoTxt='확정 의사 → 3시간 뒤 확정 확인 콜 자동 예약'; }
+  const closing = ['BX_LOST','N_CHURN'].includes(after) || (plan&&plan.close);
+  let h=`<div class="blk"><h3>콜 기록 <span style="font-weight:400;letter-spacing:0">${attemptNo(x)}회차 · 기존 콘솔과 같은 2단계</span></h3><div class="form" id="call-form">
+   <div class="row"><div class="f"><span>목적</span><select id="cf-purpose">${[...new Set([c.purpose,...PURPOSE[mod]])].map(p=>`<option ${p===c.purpose?'selected':''}>${esc(p)}</option>`).join('')}</select></div>
+   ${x.kind==='partner'?`<div class="f" style="flex:0 1 150px"><span>터치 키</span><select id="cf-touch"><option value="">없음</option>${(mod==='am_new'?[...TOUCH.map(t=>[t.k,t.k+' '+t.t]),...Object.keys(EVENTS).map(k=>[k,EVENTS[k].split(' — ')[0]])]:[['WK','WK 주간 투입 점검']]).map(([k,l])=>`<option value="${k}" ${c.touch===k?'selected':''}>${esc(l)}</option>`).join('')}</select></div>`:''}</div>
+   <div class="step"><span class="lbl"><i>1</i>연결</span>${chipBtns('connect',CONNECT,c.connect)}</div>`;
+  if(c.connect==='connected'){
+    h+=`<div class="step"><span class="lbl"><i>2</i>결과</span>${chipBtns('result',[['go','🟢 진행 — '+D.go],['hold','🟡 보류 — 재통화'],['fail','🔴 '+(mod==='booking'?'이탈':'실패')]],c.result)}</div>`;
+    if(c.result==='hold') h+= mod==='booking' ? `<div class="step"><span class="lbl">망설임 사유 (복수)</span>${chipBtns('hes',HESIT.map(t=>[t,t]),c.hes,true)}</div>` : `<div class="step"><span class="lbl">보류 사유</span>${chipBtns('reason',D.hold.map(t=>[t,t]),c.reason)}</div>`;
+    if(c.result==='fail') h+=`<div class="step"><span class="lbl">${mod==='booking'?'이탈 사유':'실패 유형'} (필수)</span>${chipBtns('reason',D.fail.map(t=>[t,t]),c.reason)}</div>`;
+    if(mod==='am_new'){ const sg=suggestState(x);
+      h+=`<div class="step"><span class="lbl">상태 판정 ${c.touch==='D7'||c.touch==='D2'?'(이 터치 필수)':''} <span style="font-weight:400">점선 = 데이터 기준 제안</span></span>${chipBtns('state',Object.entries(AM_STATE).map(([k,v])=>[k,`${k} ${v.n}`]),c.state,false,sg)}</div>
+      <div class="step"><span class="lbl">현장 의견 ${c.touch==='D7'?'(D7 필수)':''}</span>${chipBtns('voc',VOC_TAGS.map(t=>[t,t]),c.voc,true)}</div>
+      <div class="step"><span class="lbl">처방</span>${chipBtns('rx',RX_CODES.map(t=>[t,t]),c.rx)}</div>`; }
+  }
+  if(c.connect){
+    h+=`<div class="f"><span>통화 메모 ${c.connect==='connected'?'(연결된 콜은 필수)':'(선택)'} — 결과와 상관없이 항상 저장</span><textarea id="cf-memo" placeholder="통화 요지, 상대 반응, 약속한 것">${esc(c.memo)}</textarea></div>`;
+    if(!closing) h+=`<div class="row"><div class="f"><span>📌 팔로업 일시 ${autoNext?'(자동 제안 — 바꾸면 수동 조정으로 기록)':'(필수)'}</span><input id="cf-next" type="datetime-local" value="${c.next|| (autoNext?toLocalInput(autoNext):'')}"></div><div class="f"><span>또는 종료 사유</span><input id="cf-close" type="text" value="${esc(c.close)}" placeholder="팔로업이 없을 때만"></div></div>`;
+    h+=`<div class="preview"><b>저장하면</b><span>☎ ${attemptNo(x)}회차 기록 · ${c.connect==='connected'? (c.result? RESULT_L[c.result]:'결과 선택 필요') : CONNECT_L[c.connect]}</span>
+      ${after!==x.stage?`<span>스테이지 <b class="mono">${x.stage} → ${after}</b> ${stageLabel(after)} (자동 이동, 로그 별도 기록)</span>`:`<span>스테이지 유지 <span class="mono">${x.stage}</span></span>`}
+      ${autoTxt?`<span>${esc(autoTxt)}</span><span class="rule">${plan?plan.rule:'go→confirm+3h'}</span>`:''}
+      ${c.connect==='refuse'?'<span>수신거부 목록에 추가 — 이후 모든 콜 큐에서 제외</span>':''}</div>`;
+  }
+  h+=`<div class="row"><button class="btn primary" data-act="call" ${c.connect?'':'disabled'}>콜 기록 저장</button><span class="err">${esc(c.err)}</span></div></div></div>`;
+  return h;
+}
+function noteForm(){ return `<div class="blk"><h3>특이사항</h3><div class="form">
+  <div class="row"><div class="f" style="flex:0 1 130px"><span>유형</span><select id="nt-kind"><option value="special">특이</option><option value="claim">클레임</option><option value="promise">약속</option><option value="caution">주의</option><option value="correction">정정</option></select></div>
+  <label style="display:flex;gap:6px;align-items:center;font-size:13px;margin-top:16px"><input type="checkbox" id="nt-pin"> 상단 고정</label></div>
+  <textarea id="nt-body" placeholder="다른 담당자도 알아야 할 것"></textarea><div class="row"><button class="btn" data-act="note">특이사항 저장</button><span id="nt-msg"></span></div></div></div>`; }
+function drawerPartner(p){
+  const isNew=p.track==='new';
+  const kp = isNew? [['충전 후',`D+${dayDiff(p.charged)}`],['견적 제출',p.q.s],['선택',p.q.w],['평점',p.rating??'–'],['리뷰',p.reviews],['잔액',won(p.balance)+'원']]
+                  : [['월 캐파',p.cap?monthlyCap(p.cap)+'건':'–'],['9월 계약',p.month.con],['투입률',share(p)!=null?Math.round(share(p)*100)+'%':'–'],['견적 참여율',Math.round(partRate(p)*100)+'%'],['받은 요청',p.month.req],['목표',p.target?p.target+'건':'미설정']];
+  const cap=p.cap||{teams:'',trucks:{'1t':'','2.5t':'','5t':'','5t+':''},reg:'',daily:'',jpd:1,days:22};
+  const roiTot = (p.roi||[]).reduce((s,r)=>s+r.rev,0);
+  const capForm = !isNew? `<div class="blk"><h3>캐파 · 투입 목표 <span style="font-weight:400;letter-spacing:0">(저장 시 스냅샷으로 쌓임)</span></h3><div class="form">
+    <div class="row">${[['cp-teams','팀 수',cap.teams],['cp-reg','정규 인력',cap.reg],['cp-daily','일용 인력',cap.daily]].map(([id,l,v])=>`<div class="f"><span>${l}</span><input id="${id}" type="number" min="0" value="${v}"></div>`).join('')}</div>
+    <div class="row">${['1t','2.5t','5t','5t+'].map(t=>`<div class="f" style="flex-basis:80px"><span>${t} 차량</span><input id="cp-t-${t.replace('.','_').replace('+','p')}" type="number" min="0" value="${cap.trucks[t]}"></div>`).join('')}</div>
+    <div class="row"><div class="f"><span>팀당 일 처리</span><input id="cp-jpd" type="number" step="0.5" min="0" value="${cap.jpd}"></div><div class="f"><span>월 가동일</span><input id="cp-days" type="number" min="0" value="${cap.days}"></div><div class="f"><span>월 미소 목표(건)</span><input id="cp-target" type="number" min="0" value="${p.target??''}"></div></div>
+    <div class="row"><div class="f"><span>일 최대 견적 참여</span><input id="cp-dmax" type="number" min="0" value="${p.dailyMax??''}"></div><div class="f"><span>견적 마감일 설정(일)</span><input id="cp-dl" type="number" min="0" value="${p.deadline??''}"></div></div>
+    <div class="row"><button class="btn primary" data-act="cap">캐파 저장</button><span id="cp-msg" class="mono" style="font-size:12px;color:var(--muted)"></span></div></div></div>
+    <div class="blk"><h3>타사 플랫폼 ROI <span style="font-weight:400;letter-spacing:0">기존 콘솔 계승 · 연결됐을 때 꼭 물어보기</span></h3><div class="form">
+      <div class="roi-list">${(p.roi||[]).map(r=>`<div><span>${esc(r.name)}</span><span class="mono">월 매출 ${won(r.rev)} · 비용 ${won(r.spend)} · ROI ${r.spend?Math.round(r.rev/r.spend)+'배':'–'}</span></div>`).join('')||'<div><span style="color:var(--faint)">아직 없음</span></div>'}
+      ${roiTot?`<div><span>미소 외 월 매출 합</span><span class="mono">${won(roiTot)} — 미소 ${p.month.con}건과 비교</span></div>`:''}</div>
+      <div class="roi"><div class="f"><span>플랫폼</span><input id="roi-name" type="text" placeholder="예: 타사 A"></div><div class="f"><span>월 매출</span><input id="roi-rev" type="text" placeholder="600만"></div><div class="f"><span>월 비용</span><input id="roi-spend" type="text" placeholder="40만"></div><button class="btn" data-act="roi">저장</button></div></div></div>` : '';
+  const checklist = isNew? `<div class="blk"><h3>세팅 체크리스트</h3><div class="check">${CHECK.map(([k,l])=>`<label><input type="checkbox" data-ck="${k}" ${p.checklist[k]?'checked':''}> ${l}</label>`).join('')}</div></div>`:'';
+  const opts = isNew? [...NEW_STAGES,{c:'N_RISK',t:'정착 위험'},{c:'N_CHURN',t:'이탈'},{c:'A1',t:'졸업 → 캐파 확대'}] : [...ACTIVE_STAGES];
+  return `<div class="dh"><div class="top"><span class="code">${p.stage}</span><h2>${esc(p.name)}</h2><button class="x" data-act="close" aria-label="닫기">×</button></div>
+    <div class="meta"><span class="mono">${p.id}</span><span>${esc(p.region)}</span>${svcChips(p)}<span>담당 ${staffName(p.owner)}</span><span>콜 ${callsOf(p).length}회</span><span>전화번호는 rfq-admin에서 확인</span></div></div>
+    <div class="db">${pinned(p)}
+    <div class="blk"><h3>${isNew?'정착 지표':'캐파 · 투입'}</h3><div class="grid2">${kp.map(([l,v])=>`<div><span>${l}</span><b>${v}</b></div>`).join('')}</div>
+      ${p.next?`<div class="rule">📌 팔로업 <b class="mono">${fmtDT(p.next.at)}</b> · ${esc(p.next.label)}</div>`:''}</div>
+    ${cadenceBlock(p)}${recentMemos(p)}${callForm(p)}${checklist}${capForm}${stageMover(opts,p.stage)}${noteForm()}
+    <div class="blk"><h3>전체 이력 — 콜 · 문자 · 스테이지</h3>${timeline(p)}</div></div>`;
+}
+function drawerOrder(o){
+  const cq=curated(o); const dd=dplus(o);
+  const steps=[['요청 생성',o.requested],['플래너 방문',o.d0],['영상 배포',o.released],['견적 제출',o.quotes.length?o.released:null],['고객 노출',o.quotes.length?new Date(o.released.getTime()+3*3600e3):null],['파트너 확정',o.stage==='B4_WON'?o.stageAt:null]];
+  const curI=steps.findIndex(s=>!s[1]);
+  const extra=`<div class="row"><div class="f"><span>확정 파트너 (B4 선택 시)</span><select id="mv-pid">${cq.filter(x=>x.shown).map(x=>`<option value="${x.pid}">${esc(PN(x.pid))} · ${won(x.amount)}원</option>`).join('')}</select></div><label style="display:flex;gap:6px;align-items:center;font-size:13px;margin-top:16px"><input type="checkbox" id="mv-bycall" checked> 예약콜 기여</label></div>`;
+  return `<div class="dh"><div class="top"><span class="code">${o.stage}</span><h2>${esc(o.cust)} · ${esc(o.region)}</h2><button class="x" data-act="close" aria-label="닫기">×</button></div>
+    <div class="meta"><span class="mono">${o.id}</span><span>${o.py}평</span><span>이사일 <b>${fmtD(o.move)}</b></span><span>플래너 ${esc(o.planner)}</span><span>담당 ${staffName(o.owner)}</span></div>
+    <div class="meta" style="align-items:center"><span class="dd d${dd}" style="font-size:12px">D+${dd}</span>${ruler(o)}<span>관리 종료 ${fmtD(new Date(o.d0.getTime()+5*DAY))}</span><span>전화번호는 rfq-admin에서 확인</span></div></div>
+    <div class="db">${pinned(o)}
+    <div class="blk"><h3>오더 흐름</h3><div class="flow">${steps.map((s,i)=>`<div class="${s[1]?'done':i===curI?'cur':''}"><i></i>${s[0]}<small>${s[1]?fmtDT(s[1]):'—'}</small></div>`).join('')}</div></div>
+    <div class="blk"><h3>견적 ${o.quotes.length}건 제출 · ${Math.min(4,o.quotes.length)}건 노출</h3>
+      ${o.quotes.length?`<div class="quotes">${cq.map(x=>`<div class="q ${x.shown?'':'hid'}"><span class="rk">#${x.pos}</span><span class="nm" style="min-width:0">${esc(PN(x.pid))} <span style="font-size:12px;color:var(--faint)">평점 ${x.rank.toFixed(2)}</span></span><span class="amt">${won(x.amount)}원</span>${x.shown?'<span class="chip solid">노출</span>':'<span class="chip">숨김</span>'}</div>`).join('')}</div>`
+      :'<div class="pinned"><b>공급 경고</b>견적 0건 — D0 18시까지 없으면 AM 수동매칭 요청이 자동 생성됩니다.</div>'}</div>
+    ${recentMemos(o)}${callForm(o)}${stageMover(BOOK_STAGES,o.stage,extra)}${noteForm()}
+    <div class="blk"><h3>전체 이력 — 콜 · 문자 · 스테이지</h3>${timeline(o)}</div></div>`;
+}
+function cur(){ const [t,id]=openKey.split(':'); return t==='p'?P[id]:O[id]; }
+function openDrawer(key, keepForm){ const changed = key!==openKey; openKey=key; const x=cur(); if(!x) return; if(changed||!keepForm||!CF) resetCF(x);
+  const ov=$('#overlay'); ov.innerHTML=`<div class="scrim" data-act="close"></div><aside class="drawer ${changed?'anim':''}" role="dialog" aria-label="상세">${x.kind==='partner'?drawerPartner(x):drawerOrder(x)}</aside>`; ov.hidden=false;
+  const sc=ov.querySelector('.db'); if(sc && openDrawer._keep){ sc.scrollTop=openDrawer._keep; openDrawer._keep=0; } }
+function closeDrawer(){ openKey=null; CF=null; $('#overlay').hidden=true; $('#overlay').innerHTML=''; }
+function refresh(keepForm){ const sc=document.querySelector('.db'); openDrawer._keep=sc?sc.scrollTop:0; render(); if(openKey) openDrawer(openKey, keepForm); }
+function toast(m){ const t=$('#toast'); t.textContent=m; t.hidden=false; clearTimeout(toast._t); toast._t=setTimeout(()=>t.hidden=true,2600); }
+
+/* ================= 액션 ================= */
+function moveStage(x, to, reason, auto, who){
+  const from=x.stage; if(from===to) return;
+  x.stage=to; x.stageAt=new Date(NOW);
+  if(x.kind==='partner' && to.startsWith('A') && x.track==='new'){ x.track='active'; x.cap=null; x.month={req:0,sub:0,con:0}; x.trend=[0,0,0,0,0,0]; x.roi=[]; x.owner='s2'; x.next={at:at(3,11),label:'캐파 인터뷰'}; }
+  push({type:'stage',ts:new Date(NOW.getTime()+1000),subject:x.kind,sid:x.id,actor:who===undefined?actor:who,from,to,memo:reason,auto},true);
+}
+function doCall(){
+  const x=cur(); const c=CF; const mod=modOf(x);
+  c.memo=$('#cf-memo')?.value.trim()||''; const nxv=$('#cf-next')?.value||''; c.close=$('#cf-close')?.value.trim()||'';
+  c.purpose=$('#cf-purpose').value; const tk=$('#cf-touch'); if(tk) c.touch=tk.value||null;
+  const plan = c.connect==='absent'? absencePlan(x):null; const after=stageAfterCall(x,c,plan||{});
+  const closing=['BX_LOST','N_CHURN'].includes(after)||(plan&&plan.close);
+  const errs=[];
+  if(c.connect==='connected'){ if(!c.result) errs.push('결과'); if(c.result==='fail'&&!c.reason) errs.push(mod==='booking'?'이탈 사유':'실패 유형'); if(c.result==='hold'&&mod!=='booking'&&!c.reason) errs.push('보류 사유'); if(!c.memo) errs.push('메모');
+    if(mod==='am_new' && ['D2','D7'].includes(c.touch) && !c.state) errs.push('상태 판정'); if(mod==='am_new' && c.touch==='D7' && !c.voc.length) errs.push('현장 의견'); }
+  if(!closing && !nxv && !c.close) errs.push('📌 팔로업 일시 또는 종료 사유');
+  if(errs.length){ c.err=errs.join(', ')+'을(를) 채워야 저장됩니다'; refresh(true); return; }
+  if(mod==='booking' && c.connect==='connected' && c.result==='hold') c.reason='고민 중';
+  const nd = nxv? new Date(nxv):null;
+  let auto=null; if(plan) auto = (nd && plan.next && Math.abs(nd-plan.next)>60000)?'수동 조정':plan.rule; if(mod==='booking'&&c.result==='go') auto='go→confirm+3h';
+  if(c.connect==='dead'||c.connect==='refuse') auto='connect:'+c.connect;
+  const e=push({type:'call',ts:new Date(NOW),subject:x.kind,sid:x.id,actor,group:newGroup(),attempt:attemptNo(x),purpose:c.purpose,touch:c.touch,
+    connect:c.connect,result:c.connect==='connected'?c.result:null,reason:c.reason,state:c.state,voc:[...c.voc],rx:c.rx,hes:mod==='booking'?[...c.hes]:[],
+    memo:c.memo,stageAt:x.stage,stageAfter:after,next:closing?null:nd,close:c.close||(closing?'콜 결과로 종료':''),auto},true);
+  if(plan&&plan.sms) push({type:'sms',ts:new Date(NOW.getTime()+500),subject:x.kind,sid:x.id,actor,title:mod==='booking'?'견적 도착·비교 안내 문자':'부재 문자 발송',memo:`부재 ${plan.tot}회째 — 자동 템플릿`},true);
+  if(mod==='booking'){ x.tags=[...c.hes]; if(after==='BX_LOST') x.lost = c.connect==='connected'? LOST_MAP[c.reason]||'etc' : 'unreachable'; x.next = nd?{at:nd,label:c.result==='go'?'확정 확인':c.connect==='absent'?'부재 재시도':'예약된 재통화'}:null; }
+  else x.next = nd?{at:nd,label:(c.touch?c.touch+' ':'')+c.purpose+' 후속'}:null;
+  if(after!==x.stage) moveStage(x, after, `콜 결과 반영: ${outcomeText(e)}`, auto);
+  const msg = `☎ ${e.attempt}회차 저장 · ${outcomeText(e)}${after!==e.stageAt?` · ${e.stageAt}→${after}`:''}${nd?` · 📌 팔로업 ${fmtDT(nd)}`:''}`;
+  resetCF(x); refresh(); toast(msg);
+}
+function doMove(){
+  const x=cur(); const to=$('#mv-to').value; const reason=$('#mv-reason').value.trim(); const msg=$('#mv-msg');
+  if(to===x.stage){ msg.innerHTML='<span class="err">현재와 같은 단계입니다</span>'; return; }
+  if(!reason){ msg.innerHTML='<span class="err">사유를 입력해야 이동됩니다</span>'; $('#mv-reason').focus(); return; }
+  let body=reason;
+  if(to==='B4_WON'){ const pid=$('#mv-pid').value; const qq=x.quotes.find(z=>z.pid===pid); x.won={pid,amount:qq?qq.amount:0,byCall:$('#mv-bycall').checked}; body=`확정: ${PN(pid)} ${won(x.won.amount)}원${x.won.byCall?' · 예약콜 기여':''} · ${reason}`; }
+  if(to==='BX_LOST') x.lost='etc';
+  moveStage(x,to,body,null); refresh(true); toast(`${stageLabel(to)}(으)로 이동 · 로그 기록됨`);
+}
+function doNote(){ const x=cur(); const body=$('#nt-body').value.trim(); if(!body){ $('#nt-msg').innerHTML='<span class="err">내용을 입력하세요</span>'; return; }
+  const kind=$('#nt-kind').value; const pin=$('#nt-pin').checked; x.notes.push({kind,body,pinned:pin,ts:new Date(NOW),actor});
+  push({type:'note',ts:new Date(NOW),subject:x.kind,sid:x.id,actor,title:`특이사항(${$('#nt-kind').selectedOptions[0].text})${pin?' · 고정':''}`,memo:body},true); refresh(true); toast('특이사항 저장됨'); }
+function doCap(){ const x=cur(); const n=i=>{const v=$(i).value; return v===''?0:+v;};
+  const before=x.cap?monthlyCap(x.cap):null;
+  const cap={teams:n('#cp-teams'),trucks:{'1t':n('#cp-t-1t'),'2.5t':n('#cp-t-2_5t'),'5t':n('#cp-t-5t'),'5t+':n('#cp-t-5tp')},reg:n('#cp-reg'),daily:n('#cp-daily'),jpd:n('#cp-jpd')||1,days:n('#cp-days')||22};
+  if(!cap.teams){ $('#cp-msg').innerHTML='<span class="err">팀 수는 1 이상이어야 합니다</span>'; return; }
+  x.cap=cap; x.target=n('#cp-target')||null; x.dailyMax=n('#cp-dmax')||null; x.deadline=n('#cp-dl')||null;
+  push({type:'field',ts:new Date(NOW),subject:'partner',sid:x.id,actor,title:`캐파 스냅샷 · 월 캐파 ${before??'–'} → ${monthlyCap(cap)}건`,memo:`팀 ${cap.teams} · 인력 ${cap.reg+cap.daily} · 목표 ${x.target??'미설정'}건`},true);
+  refresh(true); toast('캐파 저장 · 투입률 재계산'); }
+const parseWon = s => { s=String(s||'').replace(/[,\s원]/g,''); const m=s.match(/^([\d.]+)(만|억)?$/); if(!m) return NaN; return Math.round(parseFloat(m[1])*(m[2]==='만'?1e4:m[2]==='억'?1e8:1)); };
+function doRoi(){ const x=cur(); const name=$('#roi-name').value.trim(); const rev=parseWon($('#roi-rev').value), sp=parseWon($('#roi-spend').value||'0');
+  if(!name||isNaN(rev)){ toast('플랫폼 이름과 월 매출을 입력하세요 (예: 600만)'); return; }
+  x.roi=(x.roi||[]).filter(r=>r.name!==name).concat([{name,rev,spend:isNaN(sp)?0:sp}]);
+  push({type:'field',ts:new Date(NOW),subject:'partner',sid:x.id,actor,title:`타사 플랫폼 ROI 갱신 · ${name}`,memo:`월 매출 ${won(rev)} · 비용 ${won(isNaN(sp)?0:sp)}`},true); refresh(true); toast('타사 ROI 저장됨'); }
+
+document.addEventListener('click',e=>{
+  const o=e.target.closest('[data-open]'); if(o){ openDrawer(o.dataset.open); return; }
+  const f=e.target.closest('[data-filter]'); if(f){ filter=f.dataset.filter; render(); return; }
+  const cl=e.target.closest('[data-cl]'); if(cl){ const k=cl.dataset.cl; let v=cl.dataset.v; if(k==='range') v=+v; CL[k]=v; render(); return; }
+  const cf=e.target.closest('[data-cf]'); if(cf && CF){ const k=cf.dataset.cf, v=cf.dataset.v; const m=$('#cf-memo'); if(m) CF.memo=m.value; const nx=$('#cf-next'); if(nx&&k!=='connect'&&k!=='result') CF.next=nx.value; const cz=$('#cf-close'); if(cz) CF.close=cz.value;
+    if(cf.dataset.multi){ const arr=CF[k]; CF[k]= arr.includes(v)? arr.filter(z=>z!==v):[...arr,v]; }
+    else { CF[k] = CF[k]===v? null : v; if(k==='connect'){ CF.result=null; CF.reason=null; CF.next=''; } if(k==='result'){ CF.reason=null; CF.next=''; } }
+    CF.err=''; refresh(true); return; }
+  const a=e.target.closest('[data-act]'); if(!a) return;
+  ({close:closeDrawer,move:doMove,call:doCall,note:doNote,cap:doCap,roi:doRoi})[a.dataset.act]?.();
+});
+document.addEventListener('change',e=>{
+  if(e.target.id==='cl-who'){ CL.who=e.target.value; render(); return; }
+  if(e.target.id==='cl-moved'){ CL.moved=e.target.checked; render(); return; }
+  if(e.target.id==='cl-memo'){ CL.memo=e.target.checked; render(); return; }
+  if(e.target.id==='cf-purpose'&&CF){ CF.purpose=e.target.value; return; }
+  if(e.target.id==='cf-touch'&&CF){ CF.touch=e.target.value||null; const m=$('#cf-memo'); if(m) CF.memo=m.value; refresh(true); return; }
+  const c=e.target.closest('[data-ck]'); if(c){ const x=cur(); x.checklist[c.dataset.ck]=c.checked;
+    push({type:'field',ts:new Date(NOW),subject:'partner',sid:x.id,actor,title:`체크리스트 ${c.checked?'완료':'해제'}: ${CHECK.find(z=>z[0]===c.dataset.ck)[1]}`,memo:''},true); refresh(true); }});
+document.addEventListener('input',e=>{ if(e.target.id==='q'){ q=e.target.value; const pos=e.target.selectionStart; render(); const n=$('#q'); n.focus(); n.setSelectionRange(pos,pos); } if(e.target.id==='cf-memo'&&CF) CF.memo=e.target.value; });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&openKey) closeDrawer(); if(e.key==='Enter'&&e.target.matches('tr[data-open]')) openDrawer(e.target.dataset.open); });
+const actorSel=$('#actor'); actorSel.innerHTML=STAFF.map(s=>`<option value="${s.id}">${s.name} · ${s.role}</option>`).join(''); actorSel.onchange=()=>{actor=actorSel.value; render();};
+function route(){ const h=location.hash.replace('#',''); view=['am-new','am-active','booking','calls'].includes(h)?h:'am-new'; filter='all'; q=''; closeDrawer(); render(); }
+window.addEventListener('hashchange',route); route();
+})();
+</script>
+</body></html>
