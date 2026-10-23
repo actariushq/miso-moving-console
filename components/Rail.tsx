@@ -7,7 +7,7 @@ import { supabaseBrowser } from '@/lib/supabase/client';
 
 const NAV = [
   { g: '오늘', items: [['/today', '오늘의 큐']] },
-  { g: 'AE', items: [['/ae', 'AE 온보딩'], ['/ae/followup', 'AE 팔로우업']] },
+  { g: 'AE', items: [['/ae', 'AE 온보딩'], ['/ae/followup', 'AE 팔로우업'], ['/ae/regions', '미소방문 권역']] },
   { g: 'AM', items: [['/am-care', '관리 대상'], ['/am-new', '신규 정착'], ['/am-active', '캐파 확대'], ['/matching', '수동매칭']] },
   { g: '예약콜 · 미소방문', items: [['/booking', '예약콜 큐']] },
   { g: '기록 · 성과', items: [['/calls', '콜 로그'], ['/history', '히스토리'], ['/performance', '성과 관리']] },

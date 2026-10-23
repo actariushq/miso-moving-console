@@ -125,7 +125,8 @@ export function aeLabels(r: any): AeLabel[] {
   if ((+s.mv_received_90d || 0) > 0) out.push({ k: 'seen', t: `미소방문 요청 봄 ${s.mv_received_90d}건(90일)`, tone: 'warn' });
   if ((+i.mv_received_not_submitted || 0) > 0) out.push({ k: 'unsub', t: `요청 받고 미제출 ${i.mv_received_not_submitted}`, tone: 'warn' });
   const rec = days(s.moving_last_quote_at || i.last_moving_quote);
-  if (rec != null && rec <= 30) out.push({ k: 'active', t: '최근 30일 견적 활발', tone: 'ok' });
+  // 액티브/이탈은 리스트의 상태 표시(StatusPills)가 맡는다 — 커버리지 동기화 전 리드만 옛 라벨로
+  if (r.active_30d == null && rec != null && rec <= 30) out.push({ k: 'active', t: '최근 30일 견적 활발', tone: 'ok' });
   else if (rec != null && rec > 365) out.push({ k: 'dormant', t: '1년+ 휴면', tone: '' });
   if ((+i.large_move_quotes_1y || 0) >= 10) out.push({ k: 'large', t: '대형 이사', tone: 'ok' });
   if (s.mv_onboarding_status === 'Onboarded') out.push({ k: 'reg', t: '미소방문 온보딩됨', tone: 'mv' });
